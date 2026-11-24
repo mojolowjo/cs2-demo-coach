@@ -196,7 +196,17 @@ def analyze(path, me=None, reaction=(150, 220)):
                     b = bots.at(n, g[q], frac=True)
                     if b is not None and b[4] and math.hypot(wrap(ys[q] - b[0]), ps[q] - b[1]) <= ON_HEAD_DEG:
                         cls = "slipped"; break
-            row.update(target=n, err=round(err, 2), yawErr=round(yerr, 2), pitchErr=round(r.pitch - a[1], 2),
+            # did the bot change how it moved on his screen in the last ~0.3 s? (slowed, or swept faster as it passed close)
+            bot_changed = False
+            gb = bots.b[n]
+            if tk - 20 in gb.index and tk - 1 in gb.index:
+                dv = gb.velocity.get(tk - 1, np.nan) - gb.velocity.get(tk - 20, np.nan)
+                q20, q10, q1 = bots.at(n, tk - 20), bots.at(n, tk - 10), bots.at(n, tk - 1)
+                if q20 and q10 and q1:
+                    w1, w2 = abs(wrap(q10[0] - q20[0])), abs(wrap(q1[0] - q10[0]))
+                    bot_changed = bool(dv < -40 or (w2 - w1) / max(w1, 0.3) > 0.3 or
+                                       np.sign(wrap(q10[0] - q20[0])) != np.sign(wrap(q1[0] - q10[0])))
+            row.update(target=n, botChanged=bot_changed, err=round(err, 2), yawErr=round(yerr, 2), pitchErr=round(r.pitch - a[1], 2),
                        lead=round(yerr * (1 if w >= 0 else -1), 2), dist=int(a[2]), tSpeed=int(a[3]) if a[3] == a[3] else None,
                        tAng=round(abs(w), 1), settle=round(settle), cls=cls, spray=gap is not None and gap <= 0.12)
         clicks.append(row)
@@ -285,7 +295,7 @@ def analyze(path, me=None, reaction=(150, 220)):
                            over=share(x.over), under=share(x.under), errAbs=med(x.primaryErr.abs()))
     tw = W.ms / W.ms.sum() if len(W) else None
     out = dict(
-        version=3, player=me, map=header.get("map_name"), reaction=[lo, hi],
+        version=4, player=me, map=header.get("map_name"), reaction=[lo, hi],
         calibration=dict(headZ=head_z, fromHeadshots=n_cal, alignShiftTicks=shift, alignErrDeg=round(align_err, 3),
                          samplesPerSec=round(len(A) / max(dur, 1))),
         session=dict(minutes=round(dur / 60, 1), kills=int(len(km)), hsKills=int(km.headshot.sum()), shots=int(len(S)),
@@ -296,6 +306,8 @@ def analyze(path, me=None, reaction=(150, 220)):
         clicks=dict(targets=targets, movingTaps=int(len(moving)), stillTaps=int(len(still)), classes=classes,
                     other=classes_of(still if targets == "moving" else moving), earlyShare=share(taps.cls.isin(["early", "slipped"])) if len(taps) else None,
                     slippedShare=share(taps.cls == "slipped") if len(taps) else None,
+                    slippedBotChanged=share(taps[taps.cls == "slipped"].botChanged.astype(bool)) if len(taps) else None,
+                    onHeadBotChanged=share(taps[~taps.cls.isin(["early", "slipped"])].botChanged.astype(bool)) if len(taps) else None,
                     settleMedian=med(taps[taps.settle >= 16].settle) if len(taps) else None),
         flicks=dict(n=int(len(F)), medianDur=med(F.dur) if len(F) else None, tPeak=med(F.tPeak) if len(F) else None,
                     corr=share(F.corrections > 0) if len(F) else None, errPctOfAmp=med((F.primaryErr.abs() / F.amp) * 100) if len(F) else None,
@@ -306,7 +318,7 @@ def analyze(path, me=None, reaction=(150, 220)):
                       err=round(float((W.err * tw).sum()), 2) if len(W) else None, lead=round(float((W.lead * tw).sum()), 2) if len(W) else None,
                       ratio=med(W.ratio) if len(W) else None, surges=round(float((W.surges * tw).sum()) * 100) if len(W) else None,
                       corrPerS=med(W.corrPerS) if len(W) else None),
-        perShot={str(int(r.tick)): dict(settle=r.settle, cls=r.cls, err=r.err) for r in C.itertuples() if getattr(r, "cls", None) == getattr(r, "cls", None) and isinstance(getattr(r, "cls", None), str)},
+        perShot={str(int(r.tick)): dict(settle=r.settle, cls=r.cls, err=r.err, botChanged=bool(r.botChanged)) for r in C.itertuples() if getattr(r, "cls", None) == getattr(r, "cls", None) and isinstance(getattr(r, "cls", None), str)},
     )
     return out
 
@@ -324,6 +336,8 @@ def report(a):
     names = {"early": "never arrived", "slipped": "slipped off", "timed": f"timed (<{lo} ms)", "grey": f"{lo}-{hi} ms", "tracked": f"tracked (>{hi} ms)"}
     for k, v in c["classes"].items():
         print(f"  {names[k]:<18} n={v['n']:<4} hit {v['hit']}%  median err {v['err']} deg")
+    if c.get("slippedBotChanged") is not None:
+        print(f"  bot changed speed/direction on screen in the last 0.3 s: slipped-off {c['slippedBotChanged']}% vs on-head {c['onHeadBotChanged']}%")
     print(f"flicks: {f['n']} | median {f['medianDur']} ms | peak at {f['tPeak']} of the move | corrections {f['corr']}% | "
           f"first-motion error {f['errPctOfAmp']}% of distance | over {f['over']}% under {f['under']}% | peak speed ~ amp^{f['speedExp']}")
     for k, v in f["byAmp"].items():
