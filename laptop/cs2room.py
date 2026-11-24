@@ -99,6 +99,47 @@ def steam_stats():
     open(os.path.join(d, f"{now:%Y-%m-%d}.json"), "w").write(text)
     log(f"steam stats updated ({len(out['stats'])} counters)")
 
+# ---------- friends on the CS2 ROOM hub: their Steam name + whatever CS2 stats they make public ----------
+PLAYERS_CFG = os.path.join(CONFIG, "players.json")   # {"friends": ["https://steamcommunity.com/id/...", ...]} (not in the repo)
+
+def friend_stats():
+    try: urls = json.load(open(PLAYERS_CFG, encoding="utf-8")).get("friends", [])
+    except FileNotFoundError: return
+    import re
+    key = secrets()["steam_web_api_key"]
+    d = os.path.join(DATA, "steam", "players"); os.makedirs(d, exist_ok=True)
+    order = []
+    for u in urls:
+        try:
+            m = re.search(r"/profiles/(\d{17})", u) or re.search(r"/id/([^/?#]+)", u)
+            if not m: log(f"friends: can't read {u}"); continue
+            sid = m.group(1)
+            if not sid.isdigit():
+                _, r = get_json("https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?" + urllib.parse.urlencode({"key": key, "vanityurl": sid}))
+                sid = r.get("response", {}).get("steamid")
+                if not sid: log(f"friends: no Steam account at {u}"); continue
+            _, r = get_json(f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={key}&steamids={sid}")
+            pl = (r.get("response", {}).get("players") or [{}])[0]
+            out = {"steamid": sid, "name": pl.get("personaname") or "Player", "avatar": pl.get("avatarfull"),
+                   "profile_public": pl.get("communityvisibilitystate") == 3,
+                   "fetched_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "stats": None}
+            try:
+                _, raw = get_json(f"https://api.steampowered.com/ISteamUserStats/GetUserStatsForGame/v2/?appid=730&steamid={sid}&key={key}")
+                st = raw.get("playerstats", {}).get("stats")
+                if st: out["stats"] = {x["name"]: x["value"] for x in st}
+            except Exception: pass                                     # game details private
+            try:
+                _, owned = get_json(f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?steamid={sid}&include_played_free_games=1&appids_filter%5B0%5D=730&key={key}")
+                cs = next((g for g in owned.get("response", {}).get("games", []) if g.get("appid") == 730), {})
+                out["playtime_minutes"], out["playtime_2weeks_minutes"] = cs.get("playtime_forever"), cs.get("playtime_2weeks")
+            except Exception: pass
+            json.dump(out, open(os.path.join(d, sid + ".json"), "w", encoding="utf-8"), indent=1)
+            order.append(sid)
+        except Exception as e:
+            log(f"friends: {u}: {e}")
+    json.dump({"order": order}, open(os.path.join(d, "_order.json"), "w"))
+    log(f"friends: {len(order)} player(s) updated")
+
 # ---------- new Valve matches (Premier / Competitive / Wingman) ----------
 def new_share_codes():
     s, st = secrets(), load_state()
@@ -221,7 +262,7 @@ def run_all(check=True):
     try: finish_tunnel_setup()
     except Exception as e: log(f"tunnel setup error: {e}")
     with RunLock():
-        for name, fn in [("steam", steam_stats)] + ([("check", check_matches)] if check else []) + [("process", process_inbox)]:
+        for name, fn in [("steam", steam_stats), ("friends", friend_stats)] + ([("check", check_matches)] if check else []) + [("process", process_inbox)]:
             try: fn()
             except Exception as e: log(f"{name} error: {e}")
         build_site()
@@ -270,6 +311,8 @@ def listen():
 def steam_stats_safe():
     try: steam_stats()
     except Exception as e: log(f"steam error: {e}")
+    try: friend_stats()
+    except Exception as e: log(f"friends error: {e}")
 
 # ---------- web server for site\ + the "Check for new matches" button ----------
 SITE_PORT = 8080
@@ -482,7 +525,7 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
     try:
         if cmd == "run": run_all()
-        elif cmd == "steam": steam_stats(); build_site()
+        elif cmd == "steam": steam_stats(); friend_stats(); build_site()
         elif cmd == "check": check_matches()
         elif cmd == "process": process_inbox(); build_site()
         elif cmd == "build": build_site()

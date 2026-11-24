@@ -48,6 +48,21 @@ def build(app, out, store=None, steam=None):
         st = json.load(open(steam, encoding="utf-8"))
         st.pop("steamid", None)                      # the site can be reached from outside: keep the account ID off it
         json.dump(st, open(os.path.join(out, "steam.json"), "w"), separators=(",", ":"))
+    # friends (laptop: data/steam/players/<steamid>.json from config/players.json): name + public stats, no Steam IDs on the site
+    pdir = os.path.join(os.path.dirname(steam), "players")
+    players = []
+    os.makedirs(os.path.join(out, "players"), exist_ok=True)
+    try: order = json.load(open(os.path.join(pdir, "_order.json")))["order"]
+    except Exception: order = []
+    import hashlib, re
+    for sid in order:
+        try: p = json.load(open(os.path.join(pdir, sid + ".json"), encoding="utf-8"))
+        except Exception: continue
+        slug = (re.sub(r"[^a-z0-9]+", "-", p["name"].lower()).strip("-") or "player") + "-" + hashlib.sha1(sid.encode()).hexdigest()[:5]
+        p.pop("steamid", None)
+        json.dump(p, open(os.path.join(out, "players", slug + ".json"), "w"), separators=(",", ":"))
+        players.append({"slug": slug, "name": p["name"], "avatar": p.get("avatar"), "hasStats": bool(p.get("stats"))})
+    json.dump({"players": players}, open(os.path.join(out, "players.json"), "w"), separators=(",", ":"))
     old = os.path.join(out, "demos.json")
     if os.path.exists(old): os.remove(old)
     open(os.path.join(out, ".nojekyll"), "w").close()

@@ -139,6 +139,7 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
 .player:hover, .player:focus-visible { border-color: var(--ct); }
 .player .who { font-family: var(--f-display); font-weight: 700; font-size: clamp(40px, 7vw, 60px); line-height: 0.95; letter-spacing: -0.01em; }
 .player small { color: var(--muted); font-size: 13px; }
+.player .who { overflow-wrap: anywhere; align-self: end; min-height: 58px; display: flex; align-items: flex-end; }
 .brand .room a { color: inherit; text-decoration: none; }
 .menu-intro { color: var(--muted); max-width: 60ch; margin: 0; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
@@ -314,11 +315,11 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
 
   <section class="menu" id="menuView" hidden>
     <div class="brand" aria-label="m0j's CS2 Room">
-      <div class="who">m0j</div>
+      <div class="who" id="whoName">m0j</div>
       <div class="room"><a href="#" title="All players">CS2 <span class="ct">RO</span><span class="t">OM</span></a></div>
     </div>
-    <p class="menu-intro">Post-match reviews from your demos: 2D replays, what you could see and hear, and every shot broken down.</p>
-    <nav class="nav" aria-label="Pages">
+    <p class="menu-intro" id="menuIntro">Post-match reviews from your demos: 2D replays, what you could see and hear, and every shot broken down.</p>
+    <nav class="nav" aria-label="Pages" id="ownNav">
       <button data-go="history">Matches →</button>
       <button data-go="practice">Practice →</button>
       <button id="checkBtn" hidden>↻ Check for new matches</button>
@@ -327,11 +328,12 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     </nav>
     <section class="career-wrap">
       <h2>Steam lifetime <span class="h2sub" id="steamWhen"></span></h2>
+      <div id="friendHead" hidden></div>
       <div id="steam"></div>
     </section>
     <details class="more" id="fightsHome"><summary>Fights &amp; ping by match</summary><div id="fightsTrend"></div></details>
     <details class="more" id="aimHome"><summary>Aim practice by session</summary><div id="aimTrend"></div></details>
-    <section class="recent-wrap">
+    <section class="recent-wrap" id="recentWrap">
       <h2>Recent <span class="h2sub" id="demoSum"></span></h2>
       <div class="recent" id="recent"><div class="loading">Loading…</div></div>
       <p class="note">New demos: click “Check for new matches” on the laptop, drop a <code>.dem</code> into <code>CS2Room\demos\inbox</code>, or send one to Claude.</p>
@@ -595,8 +597,15 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
   fetch("steam.json", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(j => { STEAM = j; if (INDEX) renderSteam(); }).catch(() => {});
   const nf = (n) => n == null ? "—" : Number(n).toLocaleString("en-US");
   const WEAP = { ak47: "AK-47", m4a1: "M4A4/M4A1-S", awp: "AWP", deagle: "Deagle", glock: "Glock", hkp2000: "USP/P2000", p250: "P250", mp9: "MP9", mac10: "MAC-10", famas: "FAMAS", galilar: "Galil", sg556: "SG 553", aug: "AUG", ssg08: "Scout", ump45: "UMP-45", p90: "P90", fiveseven: "Five-SeveN", tec9: "Tec-9", elite: "Dualies", xm1014: "XM1014", nova: "Nova", mag7: "MAG-7", negev: "Negev", m249: "M249", bizon: "Bizon", mp7: "MP7", scar20: "SCAR-20", g3sg1: "G3SG1", sawedoff: "Sawed-Off", knife: "Knife", hegrenade: "HE", molotov: "Molotov", taser: "Zeus", revolver: "R8", cz75a: "CZ75" };
-  function renderSteam() {
-    if (!STEAM || !STEAM.stats) {
+  function renderSteam(S = STEAM, own = true) {
+    if (own && PLAYER !== "m0j") return;                  // a friend's page is showing: leave it
+    if (!own && (!S || !S.stats)) {
+      $("steamWhen").textContent = S && S.fetched_at ? `checked ${new Date(S.fetched_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "";
+      $("steam").innerHTML = `<div class="empty"><b>${esc((S && S.name) || "This player")}'s CS2 stats aren't public</b>
+        <p>They show up here once their Steam profile and <i>Game details</i> are set to Public (Steam → Edit Profile → Privacy Settings).</p></div>`;
+      return;
+    }
+    if (!S || !S.stats) {
       $("steamWhen").textContent = "";
       $("steam").innerHTML = `<div class="empty"><b>Waiting for your first Steam stats</b>
         <ol><li>In your <code>cs2-demo-coach</code> repo: Settings → Secrets and variables → Actions → New repository secret, name <code>STEAM_API_KEY</code>, value = your key.</li>
@@ -604,13 +613,13 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
         <li>Tell Claude it ran, and this section fills in.</li></ol></div>`;
       return;
     }
-    const s = STEAM.stats, g = (k) => s[k] ?? null;
+    const s = S.stats, g = (k) => s[k] ?? null;
     const pct = (a, b) => (a != null && b) ? Math.round(a / b * 1000) / 10 + "%" : "—";
     const tile = (v, kk, sub = "") => `<div class="tile"><span class="v">${v}</span><span class="k">${kk}</span>${sub ? `<span class="s">${sub}</span>` : ""}</div>`;
     const k = g("total_kills"), d = g("total_deaths");
-    const hours = STEAM.playtime_minutes != null ? Math.round(STEAM.playtime_minutes / 60) : (g("total_time_played") != null ? Math.round(g("total_time_played") / 3600) : null);
+    const hours = S.playtime_minutes != null ? Math.round(S.playtime_minutes / 60) : (g("total_time_played") != null ? Math.round(g("total_time_played") / 3600) : null);
     const tiles = [
-      tile(nf(hours), "Hours played", STEAM.playtime_2weeks_minutes ? `${Math.round(STEAM.playtime_2weeks_minutes / 60)} h last 2 weeks` : ""),
+      tile(nf(hours), "Hours played", S.playtime_2weeks_minutes ? `${Math.round(S.playtime_2weeks_minutes / 60)} h last 2 weeks` : ""),
       tile(d ? (k / d).toFixed(2) : "—", "K/D", `${nf(k)} kills · ${nf(d)} deaths`),
       tile(pct(g("total_kills_headshot"), k), "Headshot %"),
       tile(pct(g("total_shots_hit"), g("total_shots_fired")), "Accuracy", `${nf(g("total_shots_fired"))} shots`),
@@ -627,7 +636,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     const maps = Object.keys(s).filter(n => n.startsWith("total_rounds_map_")).map(n => { const m = n.slice("total_rounds_map_".length); return { m, rounds: s[n], wins: s["total_wins_map_" + m] || 0 }; })
       .filter(x => x.rounds >= 20).sort((a, b) => b.rounds - a.rounds).slice(0, 8);
     const mBars = maps.map(x => { const r = x.wins / x.rounds; return `<div class="bar"><span class="nm">${esc(x.m.replace(/^(de|cs|ar)_/, ""))}</span><span class="tr"><div style="width:${r * 100}%;background:${r >= 0.5 ? "var(--good)" : "var(--ct)"}"></div></span><span class="vv">${Math.round(r * 100)}% · ${nf(x.rounds)} rds</span></div>`; }).join("");
-    $("steamWhen").textContent = `updated ${new Date(STEAM.fetched_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+    $("steamWhen").textContent = `updated ${new Date(S.fetched_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
     $("steam").innerHTML = `<div class="career">${tiles.join("")}</div>
       <details class="more" id="moreSteam"><summary>Weapons &amp; maps</summary>
         <div class="steam-grid">
@@ -781,8 +790,30 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
   // ---------- players (the CS2 ROOM hub); friends get added here later ----------
   const PLAYERS = [{ id: "m0j", name: "m0j", note: "Steam stats · matches · practice" }];
   let PLAYER = "m0j";
+  const FRIEND = {};                                     // slug -> their Steam stats file (players/<slug>.json)
+  fetch("players.json", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(j => {
+    for (const p of (j && j.players) || []) PLAYERS.push({ id: p.slug, name: p.name, note: p.hasStats ? "Steam stats" : "Steam stats private", friend: true, avatar: p.avatar });
+    if (!location.hash) renderPlayers(); else if (/^#p-/.test(location.hash)) route();
+  }).catch(() => {});
+  async function showPlayer(id) {
+    const p = PLAYERS.find(x => x.id === id) || PLAYERS[0];
+    const own = !p.friend;
+    $("whoName").textContent = p.name;
+    $("whoName").style.fontSize = p.name.length > 6 ? `min(clamp(56px, 11vw, 112px), ${Math.round(150 / p.name.length)}vw, ${Math.round(1150 / p.name.length)}px)` : "";
+    for (const el of ["ownNav", "fightsHome", "aimHome", "recentWrap"]) $(el).hidden = !own;
+    $("menuIntro").textContent = own ? "Post-match reviews from your demos: 2D replays, what you could see and hear, and every shot broken down."
+                                     : `${p.name}'s public CS2 stats from Steam.`;
+    document.title = `${p.name}'s CS2 ROOM`;
+    if (own) { renderSteam(); return; }
+    $("steam").innerHTML = `<div class="loading">Loading…</div>`;
+    try { FRIEND[id] = FRIEND[id] || await (await fetch(`players/${encodeURIComponent(id)}.json`, { cache: "no-store" })).json(); }
+    catch { FRIEND[id] = { name: p.name }; }
+    if (PLAYER === id) renderSteam(FRIEND[id], false);
+  }
   function renderPlayers() {
-    $("players").innerHTML = PLAYERS.map(p => `<button class="player" data-player="${esc(p.id)}"><span class="who">${esc(p.name)}</span><small>${esc(p.note)}</small></button>`).join("");
+    // same wordmark for every name, shrunk to fit the card for long Steam names
+    const fit = (n) => `font-size:${Math.min(60, Math.floor(330 / Math.max(n.length, 4)))}px`;
+    $("players").innerHTML = PLAYERS.map(p => `<button class="player" data-player="${esc(p.id)}"><span class="who" style="${fit(p.name)}">${esc(p.name)}</span><small>${esc(p.note)}</small></button>`).join("");
     $("players").querySelectorAll("[data-player]").forEach(b => b.onclick = () => { location.hash = "p-" + b.dataset.player; });
   }
 
@@ -793,7 +824,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     const show = (v) => { for (const id of ["roomView", "menuView", "historyView", "replayView"]) $(id).hidden = id !== v; };
     if (h === "") { pause(); renderPlayers(); show("roomView"); document.title = "CS2 ROOM"; return; }
     const pm = /^p-(.+)$/.exec(h);
-    if (pm) { pause(); PLAYER = pm[1]; show("menuView"); document.title = "m0j's CS2 ROOM"; window.scrollTo(0, 0); return; }
+    if (pm) { pause(); PLAYER = pm[1]; show("menuView"); showPlayer(PLAYER); window.scrollTo(0, 0); return; }
     if (h === "history" || h === "practice") {
       pause(); const kind = h === "history" ? "match" : "practice";
       if (H.kind !== kind) { H.kind = kind; H.cat = "All"; H.day = null; }

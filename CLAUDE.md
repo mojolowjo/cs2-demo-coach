@@ -57,7 +57,9 @@ and redirects. No password (m0j's choice). The site hides his SteamID; the "Chec
 header) or for visitors signed in through Steam (OpenID, `/auth/steam`) whose SteamID64 is in `CS2Room\config\site_auth.json`
 "allowed" (created with his ID). Live since Nov 24 2026: "CS2Room tunnel" task (`cs2room.py tunnel`), key in `config\github.dpapi` (fine-grained, this repo,
 contents write). Steam sign-in through the tunnel still to be tried by m0j once.
-The laptop site opens on the CS2 ROOM hub (player buttons, `PLAYERS` in `replay/index.html`); `#p-m0j` is m0j's page. Friends later.
+The laptop site opens on the CS2 ROOM hub (player buttons); `#p-m0j` is m0j's page. Friends: their Steam profile links are in
+`CS2Room\config\players.json` (`{"friends": [urls]}`, not in this repo); each run fetches their Steam name and whatever CS2 stats
+they make public (`friend_stats()` → `data/steam/players/`), and the site shows them as `#p-<name>-<hash>` pages (no Steam IDs).
 The claude.ai artifact (link above) is the older copy; update it too only if m0j still wants it.
 
 ## Adding a new demo (match history must keep growing)
