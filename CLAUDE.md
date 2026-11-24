@@ -60,6 +60,13 @@ contents write). Steam sign-in through the tunnel still to be tried by m0j once.
 The laptop site opens on the CS2 ROOM hub (player buttons); `#p-m0j` is m0j's page. Friends: their Steam profile links are in
 `CS2Room\config\players.json` (`{"friends": [urls]}`, not in this repo); each run fetches their Steam name and whatever CS2 stats
 they make public (`friend_stats()` → `data/steam/players/`), and the site shows them as `#p-<name>-<hash>` pages (no Steam IDs).
+Friends' matches: a friend signs in through Steam on their own page and pastes their match-history auth code + latest match
+token (`POST /api/mycodes`: only hub players, own account only, checked with Steam, 6 tries/hour, same-origin), or m0j drops
+`config\friend_codes.txt` ("profile | auth | token" per line; imported then deleted). Codes live DPAPI-encrypted in
+`config\friend_codes.dpapi`. `check_matches()` covers every account, downloads each match once, records who it belongs to in
+`data/owners.json`; replays use m0j's view when he played, else the friend's (`export_replay.py --steamid`). The site tags
+summaries with `who` (m0j / hub hash); m0j's pages show only his, a friend's page lists theirs.
+Sign-in checks: Steam endpoint, claimed_id == identity, nonce under 5 min and never reused, then Steam's check_authentication.
 The claude.ai artifact (link above) is the older copy; update it too only if m0j still wants it.
 
 ## Adding a new demo (match history must keep growing)

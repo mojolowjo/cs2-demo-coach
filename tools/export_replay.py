@@ -23,9 +23,14 @@ AIM_CATS = ("Aim training", "Bots", "Refrag", "Other practice")  # practice kind
 
 def r1(v): return None if v is None or (isinstance(v, float) and math.isnan(v)) else round(float(v), 1)
 
-def export(label, path, overrides=None, category=None):
+def export(label, path, overrides=None, category=None, steamid=None):
     d, t = load(path)
-    me = pick_player(d, t, "m0j" if "m0j" in set(t.name) else None)
+    me = None
+    if steamid:                                    # whose match this is (laptop downloads: m0j or a friend), by SteamID64
+        pl = d.players.to_pandas()
+        hit = pl[pl.steamid.astype(str) == str(steamid)]
+        if len(hit): me = hit.name.iloc[0]
+    me = me or pick_player(d, t, "m0j" if "m0j" in set(t.name) else None)
     bit = player_bit(d, t, me) or 1
     rounds = d.rounds.to_pandas(); sh = d.shots.to_pandas(); dm = d.damages.to_pandas(); kl = d.kills.to_pandas()
     ev = d.events
@@ -206,12 +211,13 @@ if __name__ == "__main__":
                     help='WHEN = local date/time played, e.g. "2026-11-23 15:28" (use "-" for the file time)')
     ap.add_argument("--category", action="append", default=[], help="force the category per --demo, in order (e.g. Prefire)")
     ap.add_argument("--overrides", help="JSON file {demo file name: category} (laptop: config/categories.json)")
+    ap.add_argument("--steamid", help="SteamID64 of the player whose view the replay uses (default: m0j by name, else the first human)")
     A = ap.parse_args()
     OUT_DIR = os.path.abspath(A.store); os.makedirs(OUT_DIR, exist_ok=True)
     migrate(OUT_DIR)
     ov = load_overrides(A.overrides) if A.overrides else {}
     for i, (label, path, when) in enumerate(A.demo):
-        dd = export(label, path, ov, A.category[i] if i < len(A.category) else None)
+        dd = export(label, path, ov, A.category[i] if i < len(A.category) else None, A.steamid)
         if when == "-": when = datetime.datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M")
         dd["date"], dd["time"] = when.split(" ")[0], (when.split(" ") + ["00:00"])[1]
         did = write_demo(OUT_DIR, dd)

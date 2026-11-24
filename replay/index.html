@@ -165,8 +165,15 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
 .nav button { font-weight: 600; }
 .nav { align-items: center; }
 #checkBtn[aria-busy="true"] { opacity: .7; cursor: progress; }
-.steam-in { font-size: 13px; color: var(--muted); align-self: center; text-decoration: underline; text-underline-offset: 3px; }
-.steam-in:hover { color: var(--fg); }
+.steam-in { display: inline-flex; align-self: center; line-height: 0; border-radius: 4px; }
+.steam-in:focus-visible { outline: 2px solid var(--ct); outline-offset: 2px; }
+.steam-note { font-size: 13px; color: var(--muted); align-self: center; }
+.steam-note a { color: inherit; }
+.codes-form { display: grid; gap: 10px; max-width: 460px; margin-top: 10px; }
+.codes-form label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.codes-form input { font: 14px var(--f-mono, monospace); padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.codes-form .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.codes-msg { font-size: 13px; } .codes-msg.bad { color: var(--kill); } .codes-msg.good { color: var(--good); }
 .check-status { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
 .career-wrap, .recent-wrap { display: grid; gap: 12px; }
 .career { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 132px), 1fr)); gap: 10px; }
@@ -323,7 +330,8 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
       <button data-go="history">Matches →</button>
       <button data-go="practice">Practice →</button>
       <button id="checkBtn" hidden>↻ Check for new matches</button>
-      <a class="steam-in" id="steamIn" hidden href="auth/steam">Sign in through Steam to check for matches</a>
+      <a class="steam-in" id="steamIn" hidden href="auth/steam" title="Sign in through Steam to check for matches"><img src="https://community.steamstatic.com/public/images/signinthroughsteam/sits_01.png" alt="Sign in through Steam" width="180" height="35"></a>
+      <span class="steam-note" id="steamNote" hidden></span>
       <span class="check-status" id="checkStatus" role="status" aria-live="polite"></span>
     </nav>
     <section class="career-wrap">
@@ -333,6 +341,14 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     </section>
     <details class="more" id="fightsHome"><summary>Fights &amp; ping by match</summary><div id="fightsTrend"></div></details>
     <details class="more" id="aimHome"><summary>Aim practice by session</summary><div id="aimTrend"></div></details>
+    <section class="panel" id="friendCodes" hidden>
+      <h2>Auto-download your matches</h2>
+      <div id="codesBody"></div>
+    </section>
+    <section class="recent-wrap" id="friendMatches" hidden>
+      <h2>Matches <span class="h2sub" id="friendSum"></span></h2>
+      <div class="recent" id="friendRecent"></div>
+    </section>
     <section class="recent-wrap" id="recentWrap">
       <h2>Recent <span class="h2sub" id="demoSum"></span></h2>
       <div class="recent" id="recent"><div class="loading">Loading…</div></div>
@@ -533,14 +549,15 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   // matches.json = one small summary per demo (home + history); demo/<id>.json = full replay data, loaded when opened
-  let INDEX = null; const FULL = {};
+  let INDEX = null, ALL = []; const FULL = {};
   fetch("matches.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(d => {
-    INDEX = d.matches || [];
+    ALL = d.matches || [];
+    INDEX = ALL.filter(m => !m.who || m.who.includes("m0j"));     // m0j's pages: his own matches and practice
     renderMenu();
     route();
   }).catch(err => { $("recent").innerHTML = `<div class="loading">Couldn't load the match list (${esc(err.message)}). Reload the page to try again.</div>`; });
   const safeId = (id) => id.replace(/[^A-Za-z0-9-]/g, "-");
-  const byHash = (h) => INDEX.find(m => safeId(m.id) === h);
+  const byHash = (h) => ALL.find(m => safeId(m.id) === h);
   async function loadDemo(m) {
     if (!FULL[m.id]) FULL[m.id] = fetch(`demo/${m.id}.json`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
     return FULL[m.id];
@@ -577,11 +594,14 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
       if (!st) return;                                   // not on the laptop (artifact): nothing to show
       ME = me || { canCheck: true };
       if (ME.canCheck) { showCheck(st); if (st.running) pollCheck(true); }
-      else {
+      else if (ME.signedIn) {
+        $("steamNote").hidden = false;
+        $("steamNote").innerHTML = `Signed in through Steam · this account can't check for matches · <a href="auth/logout?r=${encodeURIComponent(location.hash)}">sign out</a>`;
+      } else {
         const a = $("steamIn"); a.hidden = false;
         a.href = "auth/steam?r=" + encodeURIComponent(location.hash || "#p-m0j");
-        if (ME.steamid) { a.textContent = "Signed in, but this Steam account can't check for matches · sign out"; a.href = "auth/logout?r=" + encodeURIComponent(location.hash); }
       }
+      if (PLAYER !== "m0j") renderCodes();
     });
   $("checkBtn").onclick = async () => {
     try {
@@ -743,12 +763,13 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
   document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { location.hash = b.dataset.go; route(); });
 
   // ---------- home ----------
+  let recCard = null;                                    // one match card (set by renderMenu, reused on friends' pages)
   function renderMenu() {
     renderSteam();
     const ms = INDEX.filter(isMatch), pr = INDEX.filter(m => !isMatch(m));
     $("demoSum").textContent = `${ms.length} ${ms.length === 1 ? "match" : "matches"} · ${pr.length} practice`;
     const recent = [...ms].reverse().slice(0, 5), lastPr = pr[pr.length - 1];
-    const rec = (m) => { const L = lineOf(m), d = dateOf(m);
+    const rec = recCard = (m) => { const L = lineOf(m), d = dateOf(m);
       return `<details class="rec" data-id="${esc(m.id)}"><summary>
           <span class="rd">${DAYS[d.getDay()]} ${esc(short(d))}<small>${esc(fmt12(m.time))}</small></span>
           <span class="rm">${esc(m.map.replace(/^(de|cs|ar)_/, ""))}<small>${esc(m.category || "")}</small></span>
@@ -768,7 +789,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
   }
   const radarImgs = {};
   function drawThumb(c) {
-    const m = INDEX.find(x => x.id === c.dataset.thumb); if (!m || !m.thumb) return;
+    const m = ALL.find(x => x.id === c.dataset.thumb); if (!m || !m.thumb) return;
     const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
     c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr);
     const g = c.getContext("2d"), t = m.thumb, b = t.bounds, pad = 200;
@@ -801,6 +822,8 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     $("whoName").textContent = p.name;
     $("whoName").style.fontSize = p.name.length > 6 ? `min(clamp(56px, 11vw, 112px), ${Math.round(150 / p.name.length)}vw, ${Math.round(1150 / p.name.length)}px)` : "";
     for (const el of ["ownNav", "fightsHome", "aimHome", "recentWrap"]) $(el).hidden = !own;
+    for (const el of ["friendMatches", "friendCodes"]) $(el).hidden = own;
+    if (!own) { renderFriendMatches(p); renderCodes(); }
     $("menuIntro").textContent = own ? "Post-match reviews from your demos: 2D replays, what you could see and hear, and every shot broken down."
                                      : `${p.name}'s public CS2 stats from Steam.`;
     document.title = `${p.name}'s CS2 ROOM`;
@@ -815,6 +838,54 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     const fit = (n) => `font-size:${Math.min(60, Math.floor(330 / Math.max(n.length, 4)))}px`;
     $("players").innerHTML = PLAYERS.map(p => `<button class="player" data-player="${esc(p.id)}"><span class="who" style="${fit(p.name)}">${esc(p.name)}</span><small>${esc(p.note)}</small></button>`).join("");
     $("players").querySelectorAll("[data-player]").forEach(b => b.onclick = () => { location.hash = "p-" + b.dataset.player; });
+  }
+
+  // ---------- a friend's matches + "auto-download your matches" (sign in through Steam, then paste your two codes) ----------
+  const STEAM_BTN = (r) => `<a class="steam-in" href="auth/steam?r=${encodeURIComponent(r)}"><img src="https://community.steamstatic.com/public/images/signinthroughsteam/sits_01.png" alt="Sign in through Steam" width="180" height="35"></a>`;
+  function renderFriendMatches(p) {
+    const hash = p.id.slice(-5);
+    const ms = ALL.filter(m => m.who && m.who.includes(hash));
+    $("friendSum").textContent = ms.length ? `${ms.length} downloaded` : "";
+    $("friendRecent").innerHTML = ms.length && recCard ? [...ms].reverse().slice(0, 10).map(recCard).join("")
+      : `<p class="none">No matches yet. Once ${esc(p.name)} adds their codes below, new Premier, Competitive and Wingman matches show up here.</p>`;
+    wireOpen($("friendRecent"));
+    $("friendRecent").querySelectorAll("details.rec").forEach(d => d.addEventListener("toggle", () => { if (d.open) drawThumb(d.querySelector("canvas")); }));
+  }
+  function renderCodes() {
+    const p = PLAYERS.find(x => x.id === PLAYER), box = $("codesBody");
+    if (!p || !p.friend) return;
+    if (!ME) { $("friendCodes").hidden = true; return; }               // not on the laptop (no sign-in there)
+    $("friendCodes").hidden = false;
+    const here = "#p-" + p.id, mine = ME.player === p.id.slice(-5);
+    if (!ME.signedIn) {
+      box.innerHTML = `<p class="note">Is this you, ${esc(p.name)}? Sign in through Steam and your Premier, Competitive and Wingman matches can download here automatically.</p>${STEAM_BTN(here)}`;
+      return;
+    }
+    if (!mine) { box.innerHTML = `<p class="note">You're signed in as a different player. <a href="auth/logout?r=${encodeURIComponent(here)}">Sign out</a> to switch.</p>`; return; }
+    if (ME.hasCodes) {
+      box.innerHTML = `<p class="codes-msg good">✓ Your matches download automatically (checked every 30 minutes).</p>
+        <div class="row" style="display:flex;gap:10px;align-items:center"><button id="codesRemove">Stop downloading my matches</button><a class="note" href="auth/logout?r=${encodeURIComponent(here)}">Sign out</a></div><p class="codes-msg" id="codesMsg"></p>`;
+      $("codesRemove").onclick = () => sendCodes({ remove: true });
+      return;
+    }
+    box.innerHTML = `<p class="note">Steam gives each player two codes that let this site find your matches. They only allow looking up your match list: no login, nothing else on your account, and you can cancel them any time by making a new code.
+        <a href="https://help.steampowered.com/en/wizard/HelpWithGameIssue/?appid=730&issueid=128" target="_blank" rel="noopener">Get your codes on Steam →</a> (“Access to Your Match History”)</p>
+      <form class="codes-form" id="codesForm" autocomplete="off">
+        <label>Authentication code<input name="auth" placeholder="ABCD-EFGHI-JKLM" maxlength="16" required spellcheck="false"></label>
+        <label>Your most recently completed match token<input name="token" placeholder="CSGO-xxxxx-xxxxx-xxxxx-xxxxx-xxxxx" maxlength="40" required spellcheck="false"></label>
+        <div class="row"><button type="submit" id="codesSave">Save</button><a class="note" href="auth/logout?r=${encodeURIComponent(here)}">Sign out</a></div>
+        <p class="codes-msg" id="codesMsg" role="status" aria-live="polite"></p>
+      </form>`;
+    $("codesForm").onsubmit = (e) => { e.preventDefault(); const f = new FormData(e.target); sendCodes({ auth: f.get("auth"), token: f.get("token") }); };
+  }
+  async function sendCodes(body) {
+    const msg = $("codesMsg"); msg.className = "codes-msg"; msg.textContent = body.remove ? "Removing…" : "Checking with Steam…";
+    try {
+      const r = await fetch("api/mycodes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json();
+      msg.className = "codes-msg " + (j.ok ? "good" : "bad"); msg.textContent = j.message || (j.ok ? "Done." : "Didn't work.");
+      if (j.ok) { ME = await (await fetch("api/me", { cache: "no-store" })).json(); setTimeout(renderCodes, 1500); }
+    } catch { msg.className = "codes-msg bad"; msg.textContent = "Couldn't reach the laptop."; }
   }
 
   // ---------- routing: (none) CS2 ROOM hub · #p-<player> player home · #history · #practice · #m-<id> · #m-<id>-round-N ----------

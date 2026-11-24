@@ -49,6 +49,19 @@ def _dpapi_decrypt(blob):
     ctypes.windll.kernel32.LocalFree(out.pbData)
     return data
 
+def _dpapi_encrypt(data):
+    import ctypes
+    from ctypes import wintypes
+    class BLOB(ctypes.Structure):
+        _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
+    buf = ctypes.create_string_buffer(data, len(data))
+    inp, out = BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char))), BLOB()
+    if not ctypes.windll.crypt32.CryptProtectData(ctypes.byref(inp), None, None, None, None, 0, ctypes.byref(out)):
+        raise RuntimeError("could not encrypt")
+    blob = ctypes.string_at(out.pbData, out.cbData)
+    ctypes.windll.kernel32.LocalFree(out.pbData)
+    return blob
+
 def secrets():
     enc = os.path.join(CONFIG, "secrets.dpapi")
     if os.path.exists(enc) and os.name == "nt":
@@ -99,6 +112,84 @@ def steam_stats():
     open(os.path.join(d, f"{now:%Y-%m-%d}.json"), "w").write(text)
     log(f"steam stats updated ({len(out['stats'])} counters)")
 
+# ---------- friends' match-history codes (so their matches download too) ----------
+FRIEND_CODES = os.path.join(CONFIG, "friend_codes.dpapi")     # {steamid: {"auth", "last", "name"}}, Windows-encrypted
+FRIEND_CODES_TXT = os.path.join(CONFIG, "friend_codes.txt")   # hand-off: "profile link | auth code | match token" per line
+AUTH_RE = r"[A-Z0-9]{4}-[A-Z0-9]{5}-[A-Z0-9]{4}"
+TOKEN_RE = r"CSGO(-[A-Za-z0-9]{5}){5}"
+
+def load_friend_codes():
+    if os.name == "nt":
+        if not os.path.exists(FRIEND_CODES): return {}
+        return json.loads(_dpapi_decrypt(bytes.fromhex(open(FRIEND_CODES).read().strip())).decode("utf-8"))
+    try: return json.load(open(FRIEND_CODES + ".local.json", encoding="utf-8"))   # non-Windows test runs only
+    except FileNotFoundError: return {}
+
+def save_friend_codes(d):
+    data = json.dumps(d).encode("utf-8")
+    if os.name == "nt":
+        tmp = FRIEND_CODES + ".tmp"; open(tmp, "w").write(_dpapi_encrypt(data).hex()); os.replace(tmp, FRIEND_CODES)
+    else:
+        json.dump(d, open(FRIEND_CODES + ".local.json", "w"))
+
+def resolve_steamid(u, key):
+    import re
+    m = re.search(r"/profiles/(\d{17})", u) or re.search(r"/id/([^/?#\s]+)", u)
+    if not m: return None
+    sid = m.group(1)
+    if sid.isdigit(): return sid
+    _, r = get_json("https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?" + urllib.parse.urlencode({"key": key, "vanityurl": sid}))
+    return r.get("response", {}).get("steamid")
+
+def check_codes(sid, auth, token):
+    """Ask Steam whether this auth code + match token belong to this account. Returns (ok, message)."""
+    import re
+    auth, token = auth.strip().upper(), token.strip()
+    if not re.fullmatch(AUTH_RE, auth): return False, "The authentication code should look like ABCD-EFGHI-JKLM."
+    if not re.fullmatch(TOKEN_RE, token): return False, "The match token should look like CSGO-xxxxx-xxxxx-xxxxx-xxxxx-xxxxx."
+    q = urllib.parse.urlencode({"key": secrets()["steam_web_api_key"], "steamid": sid, "steamidkey": auth, "knowncode": token})
+    try:
+        get_json("https://api.steampowered.com/ICSGOPlayers_730/GetNextMatchSharingCode/v1?" + q)
+        return True, "Saved. Your Premier, Competitive and Wingman matches will download from now on."
+    except urllib.error.HTTPError as e:
+        if e.code == 403: return False, "Steam says that authentication code doesn't belong to this account."
+        if e.code == 412: return False, "Steam doesn't recognise that match token for this account (use your most recent one)."
+        return False, f"Steam couldn't check the codes right now ({e.code}). Try again in a bit."
+
+def import_friend_code_file():
+    """Read config\\friend_codes.txt (if any), check each line with Steam, save the good ones encrypted, delete the file."""
+    if not os.path.exists(FRIEND_CODES_TXT): return
+    key = secrets()["steam_web_api_key"]
+    codes, kept, bad = load_friend_codes(), 0, []
+    for line in open(FRIEND_CODES_TXT, encoding="utf-8-sig"):
+        parts = [x.strip() for x in line.split("|")]
+        if len(parts) < 3 or not parts[0]: continue
+        try:
+            sid = resolve_steamid(parts[0], key)
+            if not sid: bad.append(parts[0] + ": no Steam account found"); continue
+            ok, msg = check_codes(sid, parts[1], parts[2])
+            if not ok: bad.append(parts[0] + ": " + msg); continue
+            codes[sid] = {"auth": parts[1].strip().upper(), "last": parts[2].strip(), "added": datetime.date.today().isoformat()}
+            kept += 1
+        except Exception as e:
+            bad.append(f"{parts[0]}: {e}")
+    save_friend_codes(codes)
+    os.remove(FRIEND_CODES_TXT)                                  # never leave the plain codes lying around
+    log(f"friend codes: {kept} saved from friend_codes.txt" + (f"; not saved: {'; '.join(bad)}" if bad else ""))
+
+def friend_ids():
+    """SteamIDs of the friends on the hub (from the last friend_stats run)."""
+    try: return json.load(open(os.path.join(DATA, "steam", "players", "_order.json")))["order"]
+    except Exception: return []
+
+OWNERS = os.path.join(DATA, "owners.json")      # {demo file name: [SteamID64 of every hub player it was downloaded for]}
+
+def add_owner(name, sid):
+    try: o = json.load(open(OWNERS))
+    except Exception: o = {}
+    if sid not in o.setdefault(name, []): o[name].append(sid)
+    json.dump(o, open(OWNERS, "w"), indent=1)
+
 # ---------- friends on the CS2 ROOM hub: their Steam name + whatever CS2 stats they make public ----------
 PLAYERS_CFG = os.path.join(CONFIG, "players.json")   # {"friends": ["https://steamcommunity.com/id/...", ...]} (not in the repo)
 
@@ -111,13 +202,8 @@ def friend_stats():
     order = []
     for u in urls:
         try:
-            m = re.search(r"/profiles/(\d{17})", u) or re.search(r"/id/([^/?#]+)", u)
-            if not m: log(f"friends: can't read {u}"); continue
-            sid = m.group(1)
-            if not sid.isdigit():
-                _, r = get_json("https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?" + urllib.parse.urlencode({"key": key, "vanityurl": sid}))
-                sid = r.get("response", {}).get("steamid")
-                if not sid: log(f"friends: no Steam account at {u}"); continue
+            sid = resolve_steamid(u, key)
+            if not sid: log(f"friends: no Steam account at {u}"); continue
             _, r = get_json(f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={key}&steamids={sid}")
             pl = (r.get("response", {}).get("players") or [{}])[0]
             out = {"steamid": sid, "name": pl.get("personaname") or "Player", "avatar": pl.get("avatarfull"),
@@ -141,28 +227,45 @@ def friend_stats():
     log(f"friends: {len(order)} player(s) updated")
 
 # ---------- new Valve matches (Premier / Competitive / Wingman) ----------
-def new_share_codes():
-    s, st = secrets(), load_state()
-    known = st.get("last_share_code") or s["oldest_share_code"]
-    codes = [] if st.get("last_share_code") else [known]        # first run: also fetch the match the token points at
+def next_codes(sid, auth, known):
+    """Share codes of matches newer than `known` for one account."""
+    key, codes = secrets()["steam_web_api_key"], []
     while True:
-        q = urllib.parse.urlencode({"key": s["steam_web_api_key"], "steamid": s["steam_id64"],
-                                    "steamidkey": s["match_history_auth_code"], "knowncode": known})
+        q = urllib.parse.urlencode({"key": key, "steamid": sid, "steamidkey": auth, "knowncode": known})
         status, res = get_json("https://api.steampowered.com/ICSGOPlayers_730/GetNextMatchSharingCode/v1?" + q)
         nxt = res.get("result", {}).get("nextcode")
         if status == 202 or not nxt or nxt == "n/a": break       # 202 = no newer match yet
         codes.append(nxt); known = nxt
     return codes, known
 
+def archived(name):
+    return any(os.path.exists(os.path.join(r, name + ".zip")) for r, _, _ in os.walk(ARCHIVE))
+
 def check_matches():
-    codes, newest = new_share_codes()
-    st = load_state()
-    if not codes:
+    """New Valve matches for m0j and every friend who shared their codes; downloads each match once."""
+    s, st = secrets(), load_state()
+    try: import_friend_code_file()
+    except Exception as e: log(f"friend codes file: {e}")
+    accounts = []                                                       # (sid, auth, known, first_run)
+    known = st.get("last_share_code") or s["oldest_share_code"]
+    accounts.append((s["steam_id64"], s["match_history_auth_code"], known, not st.get("last_share_code")))
+    fcodes = load_friend_codes()
+    for sid, c in fcodes.items():
+        accounts.append((sid, c["auth"], c["last"], not c.get("started")))
+    want, newest = {}, {}                                               # share code -> [owner sids]; sid -> newest code
+    for sid, auth, kn, first in accounts:
+        try:
+            codes, nw = next_codes(sid, auth, kn)
+        except Exception as e:
+            log(f"match check failed for {'m0j' if sid == s['steam_id64'] else 'a friend'}: {e}"); continue
+        if first: codes = [kn] + codes                                   # first run: also the match the token points at
+        for c in codes: want.setdefault(c, []).append(sid)
+        newest[sid] = (codes, nw)
+    if not want:
         log("no new matches"); return 0
-    s = secrets()
     node = subprocess.run(["node", os.path.join(APP, "laptop", "fetch_demo.js")], cwd=os.path.join(APP, "laptop"),
-                          input=json.dumps({"username": s["bot_steam_username"], "password": s["bot_steam_password"], "codes": codes}),
-                          capture_output=True, text=True, timeout=180, **NO_WINDOW)
+                          input=json.dumps({"username": s["bot_steam_username"], "password": s["bot_steam_password"], "codes": list(want)}),
+                          capture_output=True, text=True, timeout=300, **NO_WINDOW)
     try: res = json.loads(node.stdout)
     except Exception: raise RuntimeError("demo bot gave no answer: " + (node.stderr or "")[-300:])
     if res.get("error"):
@@ -173,21 +276,28 @@ def check_matches():
     for r in res.get("results", []):
         if not r.get("url"):
             log(f"no demo link for {r['code']} ({r.get('error') or 'not ready yet'})"); continue
+        owners = want.get(r["code"], [s["steam_id64"]])
         name = f"mm_{r.get('matchid') or r['code'][-5:]}.dem"
+        for o in owners: add_owner(name, o)
         dest = os.path.join(INBOX, name)
-        if not os.path.exists(dest):
-            log(f"downloading {r['url']}")
-            with urllib.request.urlopen(r["url"], timeout=300) as resp:
-                data = resp.read()
-            open(dest, "wb").write(bz2.decompress(data) if r["url"].endswith(".bz2") else data)
-            when = datetime.datetime.fromtimestamp(r["matchtime"]) if r.get("matchtime") else datetime.datetime.now()
-            json.dump({"source": "valve", "share_code": r["code"], "when": when.strftime("%Y-%m-%d %H:%M"), "label": "Matchmaking"},
-                      open(dest + ".json", "w"))
+        if archived(name) or os.path.exists(dest): continue              # already have it (played together)
+        log(f"downloading {r['url']}")
+        with urllib.request.urlopen(r["url"], timeout=300) as resp:
+            data = resp.read()
+        open(dest, "wb").write(bz2.decompress(data) if r["url"].endswith(".bz2") else data)
+        when = datetime.datetime.fromtimestamp(r["matchtime"]) if r.get("matchtime") else datetime.datetime.now()
+        view = s["steam_id64"] if s["steam_id64"] in owners else owners[0]    # whose eyes the replay uses
+        json.dump({"source": "valve", "share_code": r["code"], "when": when.strftime("%Y-%m-%d %H:%M"), "label": "Matchmaking",
+                   "steamid": view}, open(dest + ".json", "w"))
         got += 1
-    # only move past codes whose demo we have (or that are too old to ever have one)
-    done = [r["code"] for r in res.get("results", []) if r.get("url") or "not found" in (r.get("error") or "")]
-    if codes and set(codes) <= set(done):
-        st["last_share_code"] = newest; save_state(st)
+    # move each account past the codes we now have (or that are too old to ever have a demo)
+    done = {r["code"] for r in res.get("results", []) if r.get("url") or "not found" in (r.get("error") or "")}
+    for sid, (codes, nw) in newest.items():
+        if not set(codes) <= done: continue
+        if sid == s["steam_id64"]: st["last_share_code"] = nw
+        else: fcodes[sid]["last"] = nw; fcodes[sid]["started"] = True
+    save_state(st)
+    if fcodes: save_friend_codes(fcodes)
     log(f"{got} new demo(s) downloaded")
     return got
 
@@ -206,6 +316,7 @@ def process_inbox():
         label = meta.get("label") or os.path.splitext(f)[0]
         cmd = [PY, "-I", os.path.join(APP, "tools", "export_replay.py"), store, "--demo", label, path, when,
                "--overrides", os.path.join(CONFIG, "categories.json")]
+        if meta.get("steamid"): cmd += ["--steamid", str(meta["steamid"])]
         log(f"processing {f} ({when})")
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=1800, **NO_WINDOW)
         if p.returncode != 0:
@@ -228,6 +339,10 @@ def reprocess():
         if f.endswith(".meta.json"):
             m = json.load(open(os.path.join(d, f), encoding="utf-8")); metas[m["file"]] = m
     zips = [os.path.join(r, f) for r, _, fs in os.walk(ARCHIVE) for f in fs if f.endswith(".dem.zip")]
+    try: owners_map = json.load(open(OWNERS))
+    except Exception: owners_map = {}
+    try: my_sid = secrets()["steam_id64"]
+    except Exception: my_sid = None
     done = 0
     for z in sorted(zips):
         name = os.path.basename(z)[:-4]
@@ -237,6 +352,8 @@ def reprocess():
             with zipfile.ZipFile(z) as zf: zf.extractall(tmp)
             cmd = [PY, "-I", os.path.join(APP, "tools", "export_replay.py"), DATA, "--demo", m["label"], os.path.join(tmp, name),
                    f"{m['date']} {m['time']}", "--overrides", os.path.join(CONFIG, "categories.json")]
+            owners = owners_map.get(name) or []
+            if owners: cmd += ["--steamid", my_sid if my_sid in owners else owners[0]]
             log(f"reprocessing {name}")
             p = subprocess.run(cmd, capture_output=True, text=True, timeout=1800, **NO_WINDOW)
             if p.returncode != 0: log(f"FAILED {name}: {(p.stderr or p.stdout)[-400:]}"); continue
@@ -340,9 +457,21 @@ def _sign(secret, text):
     import hmac, hashlib
     return hmac.new(bytes.fromhex(secret), text.encode(), hashlib.sha256).hexdigest()
 
+_seen_nonces = {}
+
 def steam_verify(params):
-    """Ask Steam whether this sign-in response is genuine; returns the SteamID64 or None."""
+    """Ask Steam whether this sign-in response is genuine; returns the SteamID64 or None.
+    Also refuses: answers not from Steam's own endpoint, mismatched identities, and old or replayed answers."""
     import re
+    if params.get("openid.op_endpoint") != STEAM_OPENID or params.get("openid.ns") != "http://specs.openid.net/auth/2.0": return None
+    if params.get("openid.mode") != "id_res" or params.get("openid.claimed_id") != params.get("openid.identity"): return None
+    nonce = params.get("openid.response_nonce", "")
+    try: issued = datetime.datetime.strptime(nonce[:20], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc).timestamp()
+    except ValueError: return None
+    now = time.time()
+    if abs(now - issued) > 300 or nonce in _seen_nonces: return None   # older than 5 minutes, or used before
+    for k in [k for k, t in _seen_nonces.items() if now - t > 600]: _seen_nonces.pop(k, None)
+    _seen_nonces[nonce] = now
     q = {k: v for k, v in params.items() if k.startswith("openid.")}
     q["openid.mode"] = "check_authentication"
     req = urllib.request.Request(STEAM_OPENID, data=urllib.parse.urlencode(q).encode(),
@@ -357,6 +486,7 @@ def serve():
     from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
     status = {"running": False, "started": None, "finished": None, "new": 0, "message": "No check yet since the laptop started."}
     lock = threading.Lock()
+    code_tries = {}
 
     def do_check():
         try:
@@ -393,8 +523,13 @@ def serve():
             except ValueError: return False
             return ip.is_private or ip.is_loopback
         def _origin(self):
-            proto = self.headers.get("X-Forwarded-Proto") or ("https" if self.headers.get("CF-Connecting-IP") else "http")
-            return f"{proto}://{self.headers.get('Host', 'localhost')}"
+            host = self.headers.get("Host", "localhost")
+            if self.headers.get("CF-Connecting-IP"):
+                if host.split(":")[0] in ("localhost", "127.0.0.1"):     # tunnel didn't pass the public name: use the one it got
+                    try: return open(TUNNEL_URL_FILE).read().strip()
+                    except Exception: pass
+                return "https://" + host
+            return f"{self.headers.get('X-Forwarded-Proto') or 'http'}://{host}"
         def _session(self):
             from http.cookies import SimpleCookie
             try: v = SimpleCookie(self.headers.get("Cookie", ""))["cs2room"].value
@@ -404,9 +539,26 @@ def serve():
             if int(exp) < time.time() or _sign(auth_conf()["secret"], f"{sid}.{exp}") != sig: return None
             return sid
         def _me(self):
+            import hashlib
             sid = self._session(); local = self._local()
             allowed = bool(sid and sid in auth_conf().get("allowed", []))
-            return {"local": local, "steamid": sid, "allowed": allowed, "canCheck": local or allowed}
+            friend = bool(sid and sid in friend_ids())
+            has = False
+            if friend:
+                try: has = sid in load_friend_codes()
+                except Exception: pass
+            return {"local": local, "signedIn": bool(sid), "allowed": allowed, "canCheck": local or allowed,
+                    "player": hashlib.sha1(sid.encode()).hexdigest()[:5] if sid else None,   # matches the hub's player ids
+                    "friend": friend, "hasCodes": has}
+        def _same_site(self):
+            """POSTs must come from this site's own pages (blocks other sites from pressing our buttons)."""
+            o = self.headers.get("Origin")
+            return o is None or o == self._origin()
+        def _body(self):
+            n = int(self.headers.get("Content-Length", 0) or 0)
+            if n > 4096: return None
+            try: return json.loads(self.rfile.read(n) or b"{}")
+            except Exception: return None
         def _redirect(self, where, cookie=None):
             self.send_response(302); self.send_header("Location", where)
             if cookie is not None: self.send_header("Set-Cookie", cookie)
@@ -446,6 +598,33 @@ def serve():
         def list_directory(self, path):                                 # no folder listings
             self.send_error(404); return None
         def do_POST(self):
+            if not self._same_site(): return self._json(403, {"message": "Not allowed."})
+            if self.path.startswith("/api/mycodes"):
+                me = self._me()
+                if not me["signedIn"]: return self._json(401, {"message": "Sign in through Steam first."})
+                if not me["friend"]: return self._json(403, {"message": "Only players on the CS2 ROOM hub can add their matches. Ask m0j to add you."})
+                sid = self._session()
+                with lock:
+                    tries = code_tries.setdefault(sid, [])
+                    tries[:] = [t for t in tries if time.time() - t < 3600]
+                    if len(tries) >= 6: return self._json(429, {"message": "Too many tries. Wait an hour and try again."})
+                    tries.append(time.time())
+                body = self._body()
+                if body is None: return self._json(400, {"message": "Bad request."})
+                if body.get("remove"):
+                    with lock:
+                        c = load_friend_codes(); c.pop(sid, None); save_friend_codes(c)
+                    log("friend codes: a player removed their codes")
+                    return self._json(200, {"ok": True, "message": "Removed. Your matches won't download any more."})
+                try: ok, msg = check_codes(sid, str(body.get("auth", "")), str(body.get("token", "")))
+                except Exception as e: ok, msg = False, f"Couldn't check the codes right now ({e})."
+                if ok:
+                    with lock:
+                        c = load_friend_codes()
+                        c[sid] = {"auth": str(body["auth"]).strip().upper(), "last": str(body["token"]).strip(), "added": datetime.date.today().isoformat()}
+                        save_friend_codes(c)
+                    log("friend codes: a player added their codes from the website")
+                return self._json(200 if ok else 400, {"ok": ok, "message": msg})
             if not self.path.startswith("/api/check"): return self._json(404, {"error": "not found"})
             if not self._me()["canCheck"]:
                 return self._json(403, {"error": "Sign in through Steam to check for new matches.", "message": "Sign in through Steam to check for new matches."})
@@ -462,6 +641,7 @@ def serve():
 
 # ---------- Cloudflare quick tunnel + address for the GitHub launcher ----------
 CLOUDFLARED = os.path.join(ROOT, "tools", "cloudflared.exe")
+TUNNEL_URL_FILE = os.path.join(CONFIG, "tunnel_url.txt")   # the current public address, for the site server
 REPO = "mojolowjo/cs2-demo-coach"
 
 def github_token():
@@ -508,6 +688,7 @@ def tunnel():
         if not url:
             log("tunnel: no address from cloudflared; retrying in 1 min"); proc.kill(); time.sleep(60); continue
         log(f"tunnel: up at {url}")
+        open(TUNNEL_URL_FILE, "w").write(url)
         time.sleep(10)                                     # let Cloudflare's DNS for the new name settle
         try: publish_address(url)
         except Exception as e: log(f"tunnel: couldn't update the launcher: {e}")

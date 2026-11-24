@@ -39,6 +39,15 @@ def build(app, out, store=None, steam=None):
             shutil.copy(src, dst)
     for f in os.listdir(os.path.join(out, "demo")):  # drop demos removed from the store
         if f not in keep: os.remove(os.path.join(out, "demo", f))
+    # whose matches are these? (laptop: data/owners.json {file: [SteamID64]}); m0j -> "m0j", friends -> hub id hash; no IDs published
+    import hashlib
+    try: owners = json.load(open(os.path.join(store, "owners.json")))
+    except Exception: owners = {}
+    try: my_sid = str(json.load(open(steam, encoding="utf-8")).get("steamid"))
+    except Exception: my_sid = None
+    for m in summaries:
+        o = owners.get(m.get("file"))
+        if o: m["who"] = ["m0j" if sid == my_sid else hashlib.sha1(sid.encode()).hexdigest()[:5] for sid in o]
     tmp = os.path.join(out, "matches.json.tmp")
     json.dump({"matches": summaries}, open(tmp, "w"), separators=(",", ":"))
     os.replace(tmp, os.path.join(out, "matches.json"))
