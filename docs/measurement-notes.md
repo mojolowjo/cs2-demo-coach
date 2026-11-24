@@ -25,3 +25,8 @@
   Reaction = first shot − when he appeared on m0j's screen; < 150 ms = prefire, > 1 s = "late shot" (waited / repositioned).
 - **"Your screen" view** draws every other player at (now − m0j's screen delay): where his screen had them. It's a reconstruction
   from server positions, so it can't show client-side prediction quirks.
+- **View angles vs ticks.** The input-history clock (`player_tick_count + fraction`) is about one tick off the demo tick: align it to
+  the server's shot angles before comparing the crosshair with positions (tools/aim.py does). Early aim numbers on Nov 23 2026 were
+  made before this fix; the "behind the bot" result held after it.
+- **Head point.** Calibrated from his headshots: about Z+64.5 to 65.5 above the bot's origin (not Z+60/62 as first assumed).
+- **Local server delay.** On his own listen server his screen is exactly 1 tick (15.6 ms) behind: no ping, no buffer.

@@ -198,6 +198,15 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
 #fightsTrend { margin-top: 10px; }
 #fightsTrend tbody tr { cursor: pointer; }
 #fightsTrend tr.tot td { border-top: 1px solid var(--line); font-weight: 600; cursor: default; }
+/* aim practice */
+.aim-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 8px; }
+.aim-grid h3 { font-size: 13px; margin: 0 0 6px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.aim-big { font-family: var(--f-mono); font-size: 13px; display: flex; gap: 14px; flex-wrap: wrap; margin: 4px 0 8px; }
+.aim-big b { font-size: 18px; display: block; color: var(--fg); }
+.aim-big span { color: var(--muted); }
+#aimTrend { margin-top: 10px; }
+#aimTrend tbody tr { cursor: pointer; }
+.cls-early { color: var(--kill); } .cls-timed { color: var(--good); } .cls-tracked { color: var(--fg); } .cls-grey { color: var(--muted); }
 td.win, .win { color: var(--good); } td.loss, .loss { color: var(--kill); } td.draw { color: var(--muted); }
 /* home: collapsible extras + compact recent list */
 details.more { margin-top: 10px; }
@@ -300,6 +309,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
       <div id="steam"></div>
     </section>
     <details class="more" id="fightsHome"><summary>Fights &amp; ping by match</summary><div id="fightsTrend"></div></details>
+    <details class="more" id="aimHome"><summary>Aim practice by session</summary><div id="aimTrend"></div></details>
     <section class="recent-wrap">
       <h2>Recent <span class="h2sub" id="demoSum"></span></h2>
       <div class="recent" id="recent"><div class="loading">Loading…</div></div>
@@ -416,6 +426,11 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     </aside>
   </section>
 
+  <section class="panel aim-panel" id="aimPanel" hidden>
+    <h2>Aim breakdown <span class="h2sub" id="aimSum"></span></h2>
+    <div id="aimBody"></div>
+  </section>
+
   <section class="panel fights-panel">
     <h2>Fights this round <span class="h2sub" id="fightSum"></span></h2>
     <div class="table-wrap">
@@ -433,12 +448,12 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Time</th><th>Weapon</th><th>Wait</th><th>Inaccuracy</th><th>Speed</th><th>Target</th><th>Dist</th><th>Crosshair vs body</th><th>Pitch</th><th>Target speed</th><th>Result</th>
+            <th>Time</th><th>Weapon</th><th>Wait</th><th>Inaccuracy</th><th>Speed</th><th>Target</th><th>Dist</th><th>Crosshair vs body</th><th>Pitch</th><th>Target speed</th><th>On head</th><th>Result</th>
           </tr></thead>
           <tbody id="shots"></tbody>
         </table>
       </div>
-      <p class="note">Click a row to jump just before the shot (Shift+click: the exact moment). Crosshair bar: green band = his body width from your view, white line = where you aimed (left/right). Inaccuracy in <span class="hot">amber</span> = above your fresh-shot level for that gun. Treat about ±0.5° as measurement noise. Pitch above 0 = aimed above head level.</p>
+      <p class="note">Click a row to jump just before the shot (Shift+click: the exact moment). Crosshair bar: green band = his body width from your view, white line = where you aimed (left/right). Inaccuracy in <span class="hot">amber</span> = above your fresh-shot level for that gun. Treat about ±0.5° as measurement noise. Pitch above 0 = aimed above head level. On head (aim practice only): how long your crosshair had been on his head when you clicked.</p>
     </div>
     <div class="panel coach">
       <h2>Coach notes</h2>
@@ -701,7 +716,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     $("recent").innerHTML = (recent.length ? recent.map(rec).join("") : `<p class="none">No matches yet.</p>`) +
       (lastPr ? `<div class="sub-h">Latest practice</div>${rec(lastPr)}` : "");
     wireOpen($("recent"));
-    renderFightsTrend();
+    renderFightsTrend(); renderAimTrend();
     $("recent").querySelectorAll("details.rec").forEach(d => d.addEventListener("toggle", () => { if (d.open) drawThumb(d.querySelector("canvas")); }));
   }
   const radarImgs = {};
@@ -756,7 +771,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     $("demoTitle").textContent = `${demo.map.replace(/^(de|cs|ar)_/, "")} · ${demo.category || demo.label}`;
     $("segTabs").innerHTML = demo.segments.map((s, j) => `<button data-seg="${j}" aria-pressed="false">${esc(s.label.replace("Round ", "R"))}</button>`).join("");
     $("segTabs").querySelectorAll("button").forEach(b => b.onclick = () => { location.hash = `m-${safeId(demo.id)}-round-${+b.dataset.seg + 1}`; });
-    buildView(); buildBackground(); renderStats();
+    buildView(); buildBackground(); renderStats(); renderAim();
   }
 
   function selectSeg(j) {
@@ -1022,8 +1037,8 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
         <td>${secs(s.tick)}s</td><td>${esc(s.weapon)}</td><td>${s.gap == null ? "—" : s.gap + "s"}</td>
         <td class="${hot ? "hot" : ""}">${s.inacc == null ? "—" : s.inacc.toFixed(3)}</td><td>${s.speed ?? "—"}</td>
         <td>${esc((s.target || "—").replace(/^- /, ""))}</td><td>${s.dist ? s.dist + "u" : "—"}</td><td>${aim}</td>
-        <td>${s.pitchOff == null ? "—" : (s.pitchOff > 0 ? "+" : "") + s.pitchOff + "°"}</td><td>${s.tSpeed ?? "—"}</td><td>${res}</td></tr>`;
-    }).join("") || `<tr><td colspan="11" class="none">No shots in this segment</td></tr>`;
+        <td>${s.pitchOff == null ? "—" : (s.pitchOff > 0 ? "+" : "") + s.pitchOff + "°"}</td><td>${s.tSpeed ?? "—"}</td><td>${s.cls ? `<span class="cls-${s.cls}">${CLS[s.cls]}${s.settle ? " " + s.settle + " ms" : ""}</span>` : "—"}</td><td>${res}</td></tr>`;
+    }).join("") || `<tr><td colspan="12" class="none">No shots in this segment</td></tr>`;
     $("shots").querySelectorAll("tr[data-tick]").forEach(tr => { const go = (e) => { pause(); seek(+tr.dataset.tick - (e && e.shiftKey ? 0 : 16)); }; tr.onclick = go; tr.onkeydown = e => { if (e.key === "Enter") go(e); }; });
   }
   function highlightRows() {
@@ -1078,6 +1093,50 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
       </tbody></table></div>
       <p class="note">Fights are estimated from the demo (see a replay's “Fights this round” for how). Watch the “when they peeked” column on high-ping nights: that's where delay costs you most.</p>`;
     $("fightsTrend").querySelectorAll("tr[data-open]").forEach(tr => tr.onclick = () => { location.hash = "m-" + tr.dataset.open; });
+  }
+
+  // ---------- aim practice (tools/aim.py) ----------
+  const CLS = { early: "early", timed: "timed", grey: "in between", tracked: "tracked" };
+  function renderAim() {
+    const a = demo.aim;
+    $("aimPanel").hidden = !a;
+    if (!a) return;
+    const s = a.session, c = a.clicks, f = a.flicks, t = a.tracking, [lo, hi] = a.reaction;
+    const pc = (v) => v == null ? "—" : v + "%";
+    $("aimSum").textContent = `${s.minutes} min · ${s.kills} kills (${s.hsKills} HS) · ${s.hitPct}% of ${s.shots} shots hit · ${s.killsPerMin} kills/min · ${s.shotsPerKill} shots/kill`;
+    const row = (k, label) => { const v = c.classes[k]; return `<tr><td class="cls-${k}">${label}</td><td>${v.n}</td><td>${pc(v.hit)}</td><td>${v.err == null ? "—" : v.err + "°"}</td></tr>`; };
+    const amp = Object.entries(f.byAmp || {}).map(([k, v]) => `<tr><td>${k}°</td><td>${v.n}</td><td>${v.peak == null ? "—" : Math.round(v.peak)}°/s</td><td>${v.dur ?? "—"} ms</td><td>${pc(v.corr)}</td><td>${pc(v.over)} / ${pc(v.under)}</td></tr>`).join("");
+    $("aimBody").innerHTML = `<div class="aim-grid">
+      <div><h3>When you click</h3>
+        <div class="table-wrap"><table><thead><tr><th>Click</th><th>Taps</th><th>Hit</th><th>Off head</th></tr></thead><tbody>
+          ${row("early", "Before arriving")}
+          ${row("timed", `Timed (&lt;${lo} ms)`)}
+          ${row("grey", `${lo}–${hi} ms`)}
+          ${row("tracked", `Tracked (&gt;${hi} ms)`)}
+        </tbody></table></div>
+        <p class="note">Single taps at running bots, by how long your crosshair had been on his head when you clicked. Your reaction is ${lo}–${hi} ms, so a <span class="cls-timed">timed</span> click was decided before the crosshair landed; a <span class="cls-tracked">tracked</span> one is a reaction after holding on him. ${c.earlyShare ?? "—"}% went off <span class="cls-early">before</span> your crosshair reached the head.</p></div>
+      <div><h3>Flicks</h3>
+        <div class="aim-big"><span><b>${f.n}</b>flicks</span><span><b>${f.medianDur ?? "—"} ms</b>typical length</span><span><b>${f.tPeak ?? "—"}</b>where the peak speed is (0.5 = smooth)</span><span><b>${pc(f.corr)}</b>needed a correction</span></div>
+        <div class="table-wrap"><table><thead><tr><th>Size</th><th>n</th><th>Peak speed</th><th>Length</th><th>Corrected</th><th>Over / under</th></tr></thead><tbody>${amp}</tbody></table></div>
+        <p class="note">First motion lands within ${f.errPctOfAmp == null ? "—" : Math.round(f.errPctOfAmp)}% of the distance (median). Over/under = first motion ended more than 1° past / short of his head.</p></div>
+      <div><h3>Tracking</h3>
+        <div class="aim-big"><span><b>${t.seconds} s</b>tracking</span><span><b>${t.err ?? "—"}°</b>from head centre</span><span><b>${t.lead == null ? "—" : (t.lead > 0 ? "+" : "") + t.lead + "°"}</b>${t.lead < 0 ? "behind" : "ahead"}</span><span><b>×${t.ratio ?? "—"}</b>your speed vs his</span><span><b>${pc(t.surges)}</b>time catching up fast</span></div>
+        <p class="note">Stretches of 200 ms or more with your crosshair within 2.5° of a running bot's head. “Catching up fast” = your aim moving more than twice his speed (the wobble). ${t.corrPerS ?? "—"} speed corrections a second.</p></div>
+    </div>
+    <p class="note">From the demo's exact shot angles, your view about ${a.calibration.samplesPerSec} times a second, and bot positions every tick. Head point calibrated from ${a.calibration.fromHeadshots} of your headshots. Differences under about 0.5° are measurement noise.</p>`;
+  }
+  function renderAimTrend() {
+    const ms = INDEX.filter(m => m.aim).slice().reverse();
+    if (!ms.length) { $("aimTrend").innerHTML = `<p class="note">Shows up once an aim-practice demo is processed.</p>`; return; }
+    const pc = (v) => v == null ? "—" : v + "%";
+    $("aimTrend").innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Session</th><th>Hit</th><th>Kills/min</th><th>Clicked early</th><th>Early hit</th><th>Timed hit</th><th>Tracked hit</th><th>Flick corrections</th><th>Track error</th><th>Catching up</th></tr></thead>
+      <tbody>${ms.map(m => { const a = m.aim, d = dateOf(m); return `<tr data-open="${safeId(m.id)}" tabindex="0">
+        <td>${DAYS[d.getDay()]} ${esc(short(d))} ${esc(fmt12(m.time))} · ${esc(m.label)}</td><td>${pc(a.hitPct)}</td><td>${a.killsPerMin}</td>
+        <td>${pc(a.early)}</td><td>${pc(a.earlyHit)}</td><td>${pc(a.timedHit)}</td><td>${pc(a.trackedHit)}</td>
+        <td>${pc(a.flickCorr)}</td><td>${a.trackErr ?? "—"}°</td><td>${pc(a.surges)}</td></tr>`; }).join("")}</tbody></table></div>
+      <p class="note">Goal for the track-then-click drill: “clicked early” going down, “tracked hit” going up, “catching up” going down.</p>`;
+    $("aimTrend").querySelectorAll("tr[data-open]").forEach(tr => tr.onclick = () => { location.hash = "m-" + tr.dataset.open; });
   }
 
   function renderCoach() {

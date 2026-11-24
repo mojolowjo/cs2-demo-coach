@@ -16,4 +16,11 @@ Copy `cfg/coach.cfg` into `.../game/csgo/cfg/`, then in the console:
 3. once loaded: `go` (3 rounds, medium bots, skip warmup, start recording)
 4. `done` when finished → `.../game/csgo/coach.dem` (overwritten each time; rename to keep)
 
-Server-side GOTV recording (`tv_enable 1` before the map loads) avoids the freeze that the client `record` command causes.
+Server-side GOTV recording (`tv_enable 1` before the map loads) is the only way to record on your own: since a Dec 2025 update the
+client `record` command is cheat-protected ("command ignored" on any server without `sv_cheats 1`). On servers he joins, only the
+server's own demos are available. Checked every demo command (CSDB / TotalCSGO lists, Nov 2026): none records client-side.
+
+## Aim practice on your own server
+1. `tv_enable 1` (before the map loads)
+2. load the aim map (e.g. aim_fastreflex07 from the Workshop)
+3. `tv_record prac1` once in, `tv_stoprecord` when done. Same weapon and stance each time so sessions compare (docs/aim.md).

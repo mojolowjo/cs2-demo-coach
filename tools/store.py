@@ -54,9 +54,19 @@ def summarize(dd):
     return {"id": dd["id"], "label": dd["label"], "file": dd["file"], "date": dd["date"], "time": dd["time"], "map": dd["map"],
             "type": dd["type"], "category": dd.get("category"), "server": dd.get("server"), "score": dd.get("score"),
             "duration": dd.get("duration"), "me": me, "stats": dd.get("stats"), "line": line,
-            "fights": dd.get("fights"), "lobbyDelay": dd.get("lobbyDelay"),
+            "fights": dd.get("fights"), "lobbyDelay": dd.get("lobbyDelay"), "aim": aim_headline(dd.get("aim")),
             "segs": [{"label": sg["label"], "winner": sg["winner"], "myTeam": sg["myTeam"]} for sg in dd["segments"]],
             "thumb": {"bounds": dd["bounds"], "radar": dd.get("radar"), "path": path, "kills": kills}}
+
+def aim_headline(a):
+    """The few aim numbers the home page trend needs (full analysis stays in the demo file)."""
+    if not a: return None
+    c, f, t, s = a["clicks"], a["flicks"], a["tracking"], a["session"]
+    cl = c["classes"]
+    return {"hitPct": s["hitPct"], "killsPerMin": s["killsPerMin"], "shotsPerKill": s["shotsPerKill"], "early": c["earlyShare"],
+            "earlyHit": cl["early"]["hit"], "timedHit": cl["timed"]["hit"], "trackedHit": cl["tracked"]["hit"],
+            "flickCorr": f["corr"], "flickOver": f["over"], "flickUnder": f["under"],
+            "trackErr": t["err"], "trackLead": t["lead"], "surges": t["surges"]}
 
 def write_demo(store, dd):
     """store/demos/<id>.json (everything the replay needs) + store/demos/<id>.meta.json (the summary)."""

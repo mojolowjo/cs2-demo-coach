@@ -14,10 +14,12 @@ from cs2coach import load, pick_player, player_bit, angle_off, get_checker, los_
 from classify import classify, load_overrides
 from store import write_demo, migrate
 from duels import screen_delays, pings, find_duels, fight_summary
+import aim as aimlib
 
 OUT_DIR = "."
 
 STEP = 4  # keep every 4th tick (16 frames per second)
+AIM_CATS = ("Aim training", "Bots", "Refrag", "Other practice")  # practice kinds that get the aim analysis (tools/aim.py)
 
 def r1(v): return None if v is None or (isinstance(v, float) and math.isnan(v)) else round(float(v), 1)
 
@@ -169,11 +171,26 @@ def export(label, path, overrides=None, category=None):
     ov = dict(overrides or {})
     if category: ov[os.path.basename(path)] = category
     kind, cat = classify(header, os.path.basename(path), humans, bots, len(rounds), addons=addons, overrides=ov)
+    if cat != "Prefire":
+        for sg in out_segs:
+            if sg["label"] == "Prefire run": sg["label"] = "Session"
+    aim = None
+    if kind == "practice" and cat in AIM_CATS:
+        try:
+            aim = aimlib.analyze(path, me)
+        except Exception as e:
+            print(f"(aim analysis failed: {e})")
+        if aim:
+            per = aim.pop("perShot", {})
+            for sg in out_segs:
+                for x in sg["shots"]:
+                    p = per.get(str(x["tick"]))
+                    if p: x.update(settle=p["settle"], cls=p["cls"], headErr=p["err"])
     my_lag = lag.get(me)
     fights = fight_summary(out_segs, [float(x) for x in my_lag.dropna().values] if my_lag is not None else None)
     lobby = {n: round(float(v.dropna().median())) for n, v in lag.items() if len(v.dropna())}
     return dict(label=label, file=os.path.basename(path), map=map_name, me=me, radar=radar, wallCheck=vc is not None,
-                fights=fights, lobbyDelay=lobby,
+                fights=fights, lobbyDelay=lobby, aim=aim,
                 type=kind, category=cat, humans=humans, bots=bots, server=header.get("server_name", ""),
                 score=[won, lost] if len(rounds) else None,
                 duration=round(float(header.get("playback_time", 0) or 0)), stats=stats,

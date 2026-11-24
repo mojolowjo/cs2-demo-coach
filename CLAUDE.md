@@ -8,6 +8,8 @@ Claude builds and maintains it. m0j attaches demos in chat; Claude analyzes them
   Don't keep repeating the warning; he knows.
 - Main focus: **decision making** (what he could read from radar, sound and the killfeed, and whether his choice was good).
   Then crosshair placement before contact, and shot pacing.
+- Client-side `record` is cheat-protected since a Dec 2025 update: he can only get demos from servers that record (matchmaking,
+  his own server with `tv_enable 1` + `tv_record`, services that hand out demos). Don't suggest workarounds.
 - He learns best in **small pieces**: lead with 1–3 takeaways, short sections, offer to go deeper.
 - Be honest about measurement limits (see `docs/measurement-notes.md`). Correct earlier claims openly when new numbers change them.
 
@@ -27,6 +29,9 @@ Copy each attached demo into its own folder in the scratchpad. Run scripts with 
   Builds the data for the replay page (positions, wall check, shots, awpy stats, score, date) and copies `radar_<map>.png` next to it.
   WHEN is the local date/time the game was played (ask m0j or use the chat time); it drives the match history.
 - `tools/duels.py`: ping, TrueView screen delay per player, fight detection (who peeked, head start, reaction, outcome).
+- `tools/aim.py DEMO.dem [--reaction 150 220] [--json OUT]`: aim practice breakdown (click timing vs crosshair landing on the head,
+  flick shape/corrections/overshoot, tracking lag and catch-up surges). Runs automatically in export for practice demos.
+  Method, calibration and m0j's numbers (reaction 150–220 ms, 800 DPI × 1 sens, his track-then-click drill): `docs/aim.md`.
 - `replay/index.html`: **m0j's CS2 ROOM** (published artifact: https://claude.ai/artifact/VNDU3fgne8WG5TGgzpZ2rY).
   Home (career stats, recent games) → Match history (`#history`: Year → Month → Day/Week/Month groups, numbered Match 1, 2, 3 within
   each group) → replay (`#demo-N`, `#demo-N-rK`) with radar / "your eyes" (wall check) views, "what you knew", kill feed, shot table,
@@ -70,6 +75,7 @@ Rebuild what he knew (radar spots, likely-heard sounds, killfeed and alive count
 - `docs/awpy.md`: main library, property names that work, map data and the wall check
 - `docs/demoparser2.md`: the other parser, its bot gotcha, property aliases
 - `docs/measurement-notes.md`: noise levels and pitfalls
+- `docs/aim.md`: aim practice analysis (method, calibration, first sessions)
 - `docs/getting-demos.md`: how m0j gets demos, plus `cfg/coach.cfg` for quick bot tests
 
 Never commit raw demos (`*.dem`, they are large and contain Steam IDs). `replay/demos.json` is committed on purpose: it powers the site.
