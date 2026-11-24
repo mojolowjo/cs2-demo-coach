@@ -1,16 +1,18 @@
-"""Export CS2 demos into the JSON that m0j's CS2 ROOM (replay/index.html) reads.
+"""Export CS2 demos for m0j's CS2 ROOM (replay/index.html).
 
 usage:
-  python3 -I export_replay.py OUT/demos.json [--merge OLD/demos.json] \\
-      --demo "Bot match" coach.dem "2026-11-23 15:28" [--demo LABEL PATH WHEN ...] [--type practice ...]
+  python3 -I export_replay.py STORE --demo "Label" match.dem "2026-11-23 15:28" [--demo ...] [--category Prefire ...] [--overrides FILE]
 
---merge keeps every match already in the published page (download its demos.json first), so match history grows.
-Also copies the map's radar image (radar_<map>.png) next to demos.json when the awpy map data is installed.
+Writes STORE/demos/<id>.json (everything the replay needs) and STORE/demos/<id>.meta.json (summary for home + history),
+plus radar_<map>.png in STORE. Sorts each demo into match/practice + category (tools/classify.py).
+An old-style STORE/demos.json is split into per-demo files on the first run.
 """
-import sys, json, math, os
+import sys, json, math, os, re
 import numpy as np, pandas as pd
-sys.path.insert(0, __file__.rsplit("/", 1)[0])
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cs2coach import load, pick_player, player_bit, angle_off, get_checker, los_series, BODY_HALF_WIDTH_UNITS, TICK
+from classify import classify, load_overrides
+from store import write_demo, migrate
 
 OUT_DIR = "."
 
@@ -18,7 +20,7 @@ STEP = 4  # keep every 4th tick (16 frames per second)
 
 def r1(v): return None if v is None or (isinstance(v, float) and math.isnan(v)) else round(float(v), 1)
 
-def export(label, path):
+def export(label, path, overrides=None, category=None):
     d, t = load(path)
     me = pick_player(d, t, "m0j" if "m0j" in set(t.name) else None)
     bit = player_bit(d, t, me) or 1
@@ -53,10 +55,11 @@ def export(label, path):
         start = int(tp.iloc[0]) if len(tp) else first
         segs = [dict(label="Prefire run", start=start, fe=start, end=int(t.tick.max()), winner=None, reason=None)]
 
+    step = 8 if len(rounds) >= 10 else STEP
     out_segs = []
     for s in segs:
         R = t[(t.tick >= s["start"]) & (t.tick <= s["end"])]
-        ticks = sorted(set(R.tick[(R.tick - s["start"]) % STEP == 0]))
+        ticks = sorted(set(R.tick[(R.tick - s["start"]) % step == 0]))
         R = R[R.tick.isin(ticks)]
         players = {}
         for nm, g in R.groupby("name"):
@@ -144,8 +147,20 @@ def export(label, path):
     # score from my side's point of view (handles side switches)
     won = sum(1 for s in out_segs if s["winner"] and (3 if s["winner"] == "counter-terrorist" else 2) == s["myTeam"])
     lost = sum(1 for s in out_segs if s["winner"]) - won
-    return dict(label=label, file=path.rsplit("/", 1)[-1], map=map_name, me=me, radar=radar, wallCheck=vc is not None,
-                type="match" if len(rounds) else "practice", score=[won, lost] if len(rounds) else None,
+    try:
+        from demoparser2 import DemoParser
+        addons = DemoParser(path).parse_header().get("addons", "")
+    except Exception:
+        addons = ""
+    pinfo = d.players.to_pandas()
+    humans = int((pinfo.steamid.astype(str).str.len() > 5).sum())
+    bots = int(((pinfo.steamid.astype(str).str.len() <= 5) & (pinfo.name != "SourceTV")).sum())
+    ov = dict(overrides or {})
+    if category: ov[os.path.basename(path)] = category
+    kind, cat = classify(header, os.path.basename(path), humans, bots, len(rounds), addons=addons, overrides=ov)
+    return dict(label=label, file=os.path.basename(path), map=map_name, me=me, radar=radar, wallCheck=vc is not None,
+                type=kind, category=cat, humans=humans, bots=bots, server=header.get("server_name", ""),
+                score=[won, lost] if len(rounds) else None,
                 duration=round(float(header.get("playback_time", 0) or 0)), stats=stats,
                 places=[dict(name=r.place, x=int(r.X), y=int(r.Y)) for r in places.itertuples()],
                 bounds=dict(minX=int(alive_t.X.min()), maxX=int(alive_t.X.max()), minY=int(alive_t.Y.min()), maxY=int(alive_t.Y.max())),
@@ -154,34 +169,18 @@ def export(label, path):
 if __name__ == "__main__":
     import argparse, datetime
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("out", help="output demos.json (radar PNGs are written next to it)")
-    ap.add_argument("--merge", help="existing demos.json to keep (e.g. downloaded from the published artifact)")
+    ap.add_argument("store", help="data folder: demos/<id>.json files and radar PNGs are written here")
     ap.add_argument("--demo", nargs=3, action="append", default=[], metavar=("LABEL", "PATH", "WHEN"),
                     help='WHEN = local date/time played, e.g. "2026-11-23 15:28" (use "-" for the file time)')
-    ap.add_argument("--type", action="append", default=[], help="override type per --demo, in order: match | practice")
+    ap.add_argument("--category", action="append", default=[], help="force the category per --demo, in order (e.g. Prefire)")
+    ap.add_argument("--overrides", help="JSON file {demo file name: category} (laptop: config/categories.json)")
     A = ap.parse_args()
-    out = A.out
-    OUT_DIR = os.path.dirname(os.path.abspath(out)); os.makedirs(OUT_DIR, exist_ok=True)
-    demos = []
+    OUT_DIR = os.path.abspath(A.store); os.makedirs(OUT_DIR, exist_ok=True)
+    migrate(OUT_DIR)
+    ov = load_overrides(A.overrides) if A.overrides else {}
     for i, (label, path, when) in enumerate(A.demo):
-        dd = export(label, path)
+        dd = export(label, path, ov, A.category[i] if i < len(A.category) else None)
         if when == "-": when = datetime.datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M")
         dd["date"], dd["time"] = when.split(" ")[0], (when.split(" ") + ["00:00"])[1]
-        if i < len(A.type): dd["type"] = A.type[i]
-        demos.append(dd)
-    if A.merge:
-        old = json.load(open(A.merge))["demos"]
-        keys = {(x["file"], x.get("date"), x.get("time")) for x in demos}
-        demos = [x for x in old if (x["file"], x.get("date"), x.get("time")) not in keys] + demos
-    demos.sort(key=lambda x: (x.get("date", ""), x.get("time", "")))
-    def clean(o):
-        if isinstance(o, float): return None if math.isnan(o) or math.isinf(o) else o
-        if isinstance(o, dict): return {k: clean(v) for k, v in o.items()}
-        if isinstance(o, list): return [clean(v) for v in o]
-        if isinstance(o, (np.integer,)): return int(o)
-        if isinstance(o, (np.floating,)): return clean(float(o))
-        if isinstance(o, (np.bool_,)): return bool(o)
-        return o
-    with open(out, "w") as fh: json.dump(clean(dict(demos=demos)), fh, separators=(",", ":"), allow_nan=False)
-    for dd in demos:
-        print(dd["label"], dd["map"], dd["me"], [(s["label"], len(s["ticks"]), len(s["players"]), len(s["kills"]), len(s["shots"]), len(s["footsteps"])) for s in dd["segments"]])
+        did = write_demo(OUT_DIR, dd)
+        print(did, dd["type"], dd["category"], dd["map"], [(s["label"], len(s["ticks"])) for s in dd["segments"]][:3], "...")

@@ -152,7 +152,7 @@ def process_inbox():
     os.makedirs(INBOX, exist_ok=True)
     demos = sorted(f for f in os.listdir(INBOX) if f.endswith(".dem"))
     if not demos: return 0
-    store = os.path.join(DATA, "demos.json")
+    store = DATA
     for f in demos:
         path = os.path.join(INBOX, f)
         meta = {}
@@ -160,8 +160,8 @@ def process_inbox():
         except Exception: pass
         when = meta.get("when") or datetime.datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M")
         label = meta.get("label") or os.path.splitext(f)[0]
-        cmd = [PY, "-I", os.path.join(APP, "tools", "export_replay.py"), store, "--demo", label, path, when]
-        if os.path.exists(store): cmd[4:4] = ["--merge", store]
+        cmd = [PY, "-I", os.path.join(APP, "tools", "export_replay.py"), store, "--demo", label, path, when,
+               "--overrides", os.path.join(CONFIG, "categories.json")]
         log(f"processing {f} ({when})")
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=1800, **NO_WINDOW)
         if p.returncode != 0:

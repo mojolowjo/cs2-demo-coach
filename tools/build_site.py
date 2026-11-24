@@ -1,12 +1,14 @@
 """Assemble m0j's CS2 ROOM as a plain static site (used by the laptop and by GitHub Pages).
 
-usage: python build_site.py APP_DIR OUT_DIR [--demos DIR] [--steam FILE]
+usage: python build_site.py APP_DIR OUT_DIR [--demos STORE] [--steam FILE]
   APP_DIR  a copy of this repo (the page lives in replay/index.html)
-  OUT_DIR  folder to write index.html, demos.json, steam.json, radar_*.png into
-  --demos  folder holding demos.json + radar_*.png (default APP_DIR/replay; the laptop uses CS2Room/data)
+  OUT_DIR  site folder: index.html, matches.json, demo/<id>.json, steam.json, radar_*.png
+  --demos  data store (see tools/store.py; default APP_DIR/replay; the laptop uses CS2Room/data)
   --steam  Steam stats file (default APP_DIR/data/steam/latest.json)
 """
-import argparse, glob, os, shutil
+import argparse, glob, json, os, shutil, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from store import load_summaries, migrate
 
 HEAD = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -15,24 +17,39 @@ HEAD = """<!doctype html>
 """
 TAIL = "\n</body></html>\n"
 
-def build(app, out, demos=None, steam=None):
-    demos = demos or os.path.join(app, "replay")
+def build(app, out, store=None, steam=None):
+    store = store or os.path.join(app, "replay")
     steam = steam or os.path.join(app, "data", "steam", "latest.json")
-    os.makedirs(out, exist_ok=True)
+    migrate(store)                                   # old single demos.json -> per-demo files (no-op afterwards)
+    os.makedirs(os.path.join(out, "demo"), exist_ok=True)
     page = open(os.path.join(app, "replay", "index.html"), encoding="utf-8").read()
     # replay/index.html is written for claude.ai artifacts, which add the document skeleton; add it here.
     tmp = os.path.join(out, "index.html.tmp")
     with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(HEAD + page + TAIL)
     os.replace(tmp, os.path.join(out, "index.html"))
-    if os.path.exists(os.path.join(demos, "demos.json")):
-        shutil.copy(os.path.join(demos, "demos.json"), out)
-    for png in glob.glob(os.path.join(demos, "radar_*.png")):
+
+    summaries = load_summaries(store)
+    keep = set()
+    for m in summaries:
+        src = os.path.join(store, "demos", m["id"] + ".json")
+        dst = os.path.join(out, "demo", m["id"] + ".json")
+        keep.add(m["id"] + ".json")
+        if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(src):
+            shutil.copy(src, dst)
+    for f in os.listdir(os.path.join(out, "demo")):  # drop demos removed from the store
+        if f not in keep: os.remove(os.path.join(out, "demo", f))
+    tmp = os.path.join(out, "matches.json.tmp")
+    json.dump({"matches": summaries}, open(tmp, "w"), separators=(",", ":"))
+    os.replace(tmp, os.path.join(out, "matches.json"))
+    for png in glob.glob(os.path.join(store, "radar_*.png")):
         shutil.copy(png, out)
     if os.path.exists(steam):
         shutil.copy(steam, os.path.join(out, "steam.json"))
+    old = os.path.join(out, "demos.json")
+    if os.path.exists(old): os.remove(old)
     open(os.path.join(out, ".nojekyll"), "w").close()
-    print("built", out, sorted(os.listdir(out)))
+    print("built", out, f"{len(summaries)} demos")
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()

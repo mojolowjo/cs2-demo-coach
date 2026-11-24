@@ -192,6 +192,82 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
 .mrow .nums b { color: var(--fg); }
 .tag { display: inline-block; font-family: var(--f-mono); font-size: 10.5px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; vertical-align: 1px; }
 .win { color: var(--good); } .loss { color: var(--kill); } .draw { color: var(--muted); }
+/* home: collapsible extras + compact recent list */
+details.more { margin-top: 10px; }
+details.more > summary, details.rec > summary { cursor: pointer; list-style: none; }
+details.more > summary::-webkit-details-marker, details.rec > summary::-webkit-details-marker { display: none; }
+details.more > summary { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+details.more > summary::before, details.rec > summary::before { content: "▸"; color: var(--dim); transition: transform .15s; }
+details.more[open] > summary::before, details.rec[open] > summary::before { transform: rotate(90deg); }
+.recent { display: grid; gap: 6px; }
+details.rec { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+details.rec > summary { display: grid; grid-template-columns: 14px 120px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 12px; }
+details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
+.rd, .rm { display: grid; min-width: 0; }
+.rd { font-weight: 600; }
+.rm { font-family: var(--f-display); font-weight: 600; font-size: 15px; text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd small, .rm small { font-family: var(--f-mono); font-weight: 400; font-size: 11px; color: var(--muted); text-transform: none; }
+.rec-body { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 14px; padding: 0 12px 12px 38px; align-items: start; }
+.rec-body canvas { width: 100%; aspect-ratio: 16 / 9; border-radius: 6px; background: #0a0f14; }
+.rec-body .mini { display: flex; flex-wrap: wrap; gap: 6px 16px; font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.rec-body .mini b { color: var(--fg); font-size: 14px; margin-right: 3px; }
+.rec-body .go { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; grid-column: 2; }
+.rec-body .go button { padding: 3px 7px; font-size: 11.5px; font-family: var(--f-mono); }
+.sub-h { font-size: 11.5px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; margin: 10px 0 2px; }
+/* history controls */
+.hist-switch { display: flex; gap: 10px; flex-wrap: wrap; }
+.cats { display: flex; gap: 6px; flex-wrap: wrap; }
+.cats button { font-size: 12.5px; padding: 5px 10px; border-radius: 999px; }
+.cats button span { font-family: var(--f-mono); color: var(--muted); margin-left: 4px; }
+.cats button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.cats button[aria-pressed="true"] span { color: var(--bg); opacity: .7; }
+.cats button.zero { opacity: .45; }
+.cal-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cal-nav b { font-family: var(--f-display); font-size: 18px; min-width: 170px; text-align: center; }
+.cal-nav button { padding: 5px 10px; }
+.period-total { margin-left: auto; font-family: var(--f-mono); font-size: 13px; color: var(--muted); }
+.period-total b { color: var(--fg); font-size: 16px; }
+/* week calendar */
+.week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.day { display: grid; grid-template-rows: auto auto 1fr auto auto; justify-items: start; gap: 2px; min-height: 132px; padding: 10px; text-align: left; background: var(--panel); border-radius: 8px; color: var(--muted); }
+.day.has { color: var(--fg); background: var(--panel-2); }
+.day[aria-disabled="true"] { cursor: default; }
+.day[aria-disabled="true"]:hover { border-color: var(--line); }
+.day.today { box-shadow: inset 0 0 0 1px var(--t); }
+.day.sel { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
+.dname { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.dnum { font-family: var(--f-display); font-weight: 600; font-size: 15px; }
+.dcount { font-family: var(--f-display); font-weight: 700; font-size: 34px; line-height: 1; align-self: end; }
+.dlabel { font-size: 11px; color: var(--muted); }
+.dots { display: flex; flex-wrap: wrap; gap: 3px; min-height: 7px; }
+.dots i { width: 7px; height: 7px; border-radius: 50%; }
+.dots .dw { background: var(--good); } .dots .dl { background: var(--kill); } .dots .dn { background: var(--muted); }
+/* month = weeks */
+.weeks { display: grid; gap: 6px; }
+.wk { display: grid; grid-template-columns: 80px 130px minmax(0, 1fr) 190px; gap: 14px; align-items: center; padding: 12px 14px; text-align: left; background: var(--panel); border-radius: 8px; color: var(--muted); }
+.wk.has { color: var(--fg); }
+.wn { font-family: var(--f-display); font-weight: 700; font-size: 16px; }
+.wr { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.wbar { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+.wbar span { display: block; height: 100%; background: var(--ct); border-radius: 4px; }
+.wc { font-family: var(--f-mono); font-size: 12.5px; text-align: right; }
+.wc b { font-size: 16px; }
+.hint { margin-top: 6px; }
+.hint button { margin-left: 8px; }
+#dayList:empty { display: none; }
+@media (max-width: 720px) {
+  details.rec > summary { grid-template-columns: 12px minmax(0, 1fr) auto auto; }
+  details.rec > summary .rm { grid-column: 2; grid-row: 2; }
+  .rec-body { grid-template-columns: minmax(0, 1fr); padding-left: 12px; }
+  .rec-body .go { grid-column: 1; }
+  .week { gap: 4px; }
+  .day { min-height: 96px; padding: 6px; }
+  .dcount { font-size: 22px; }
+  .dlabel { display: none; }
+  .wk { grid-template-columns: 64px minmax(0, 1fr) auto; }
+  .wk .wbar { display: none; }
+  .period-total { margin-left: 0; width: 100%; }
+}
 @media (max-width: 720px) {
   .mrow { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
   .mrow .tm { text-align: right; }
@@ -207,7 +283,8 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
     </div>
     <p class="menu-intro">Post-match reviews from your demos: 2D replays, what you could see and hear, and every shot broken down.</p>
     <nav class="nav" aria-label="Pages">
-      <button data-go="history">Match history →</button>
+      <button data-go="history">Matches →</button>
+      <button data-go="practice">Practice →</button>
       <button id="checkBtn" hidden>↻ Check for new matches</button>
       <span class="check-status" id="checkStatus" role="status" aria-live="polite"></span>
     </nav>
@@ -217,7 +294,8 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
     </section>
     <section class="recent-wrap">
       <h2>Recent <span class="h2sub" id="demoSum"></span></h2>
-      <div class="cards" id="cards"><div class="loading">Loading demos…</div></div>
+      <div class="recent" id="recent"><div class="loading">Loading…</div></div>
+      <p class="note">New demos: click “Check for new matches” on the laptop, drop a <code>.dem</code> into <code>CS2Room\demos\inbox</code>, or send one to Claude.</p>
     </section>
   </section>
 
@@ -226,15 +304,29 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
       <div class="head-left">
         <button class="back" data-go="">← Home</button>
         <div class="mini-brand">m0j<small>CS2 ROOM</small></div>
-        <h1 style="font-size:20px">Match history<small id="histSub"></small></h1>
+        <h1 style="font-size:20px"><span id="histTitle">Matches</span><small id="histSub"></small></h1>
       </div>
-      <div class="seg-tabs" role="group" aria-label="Group by">
-        <button data-group="day" aria-pressed="true">Day</button>
-        <button data-group="week" aria-pressed="false">Week</button>
-        <button data-group="month" aria-pressed="false">Month</button>
+      <div class="hist-switch">
+        <div class="seg-tabs" role="group" aria-label="Show">
+          <button data-kind="match" aria-pressed="true">Matches</button>
+          <button data-kind="practice" aria-pressed="false">Practice</button>
+        </div>
+        <div class="seg-tabs" role="group" aria-label="View">
+          <button data-view="week" aria-pressed="true">Week</button>
+          <button data-view="month" aria-pressed="false">Month</button>
+        </div>
       </div>
     </header>
-    <div id="historyList"></div>
+    <div class="cats" id="cats" role="group" aria-label="Category"></div>
+    <div class="cal-nav">
+      <button id="prevP" aria-label="Previous">◀</button>
+      <b id="periodLabel"></b>
+      <button id="nextP" aria-label="Next">▶</button>
+      <button id="todayP">Today</button>
+      <span class="period-total" id="periodTotal"></span>
+    </div>
+    <div id="calendar"></div>
+    <div id="dayList"></div>
   </section>
 
   <div id="replayView" hidden>
@@ -366,7 +458,7 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
     }
   };
 
-  let DATA, demo, seg, tick = 0, playing = false, speed = 1, mode = "all";
+  let demo, seg, tick = 0, playing = false, speed = 1, mode = "all";
   const layers = { cone: true, sound: true, trail: true };
   const $ = id => document.getElementById(id);
   const cv = $("radar"), ctx = cv.getContext("2d");
@@ -378,23 +470,27 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
   const isMe = (n) => n === demo.me;
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-  fetch("demos.json").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(d => {
-    DATA = d;
+  // matches.json = one small summary per demo (home + history); demo/<id>.json = full replay data, loaded when opened
+  let INDEX = null; const FULL = {};
+  fetch("matches.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(d => {
+    INDEX = d.matches || [];
     renderMenu();
     route();
-  }).catch(err => { $("cards").innerHTML = `<div class="loading">Couldn't load the demo data (${esc(err.message)}). Reload the page to try again.</div>`; });
+  }).catch(err => { $("recent").innerHTML = `<div class="loading">Couldn't load the match list (${esc(err.message)}). Reload the page to try again.</div>`; });
+  const safeId = (id) => id.replace(/[^A-Za-z0-9-]/g, "-");
+  const byHash = (h) => INDEX.find(m => safeId(m.id) === h);
+  async function loadDemo(m) {
+    if (!FULL[m.id]) FULL[m.id] = fetch(`demo/${m.id}.json`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+    return FULL[m.id];
+  }
 
   // ---------- career + match history ----------
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const dateOf = (dm) => { const [y, m, d] = (dm.date || "1970-01-01").split("-").map(Number); return new Date(y, m - 1, d); };
   const resultOf = (dm) => !dm.score ? null : dm.score[0] > dm.score[1] ? "W" : dm.score[0] < dm.score[1] ? "L" : "D";
-  // per-demo line: awpy stats when the demo has rounds, otherwise counted from the replay data
-  function lineOf(dm) {
-    const st = dm.stats, f = statsOf(dm);
-    if (st) return { k: st.kills, d: st.deaths, a: st.assists, hs: Math.round(st.headshot_pct), adr: Math.round(st.adr), kast: Math.round(st.kast), rounds: st.rounds_played, hsk: st.headshot_kills, dmg: st.adr * st.rounds_played };
-    return { k: f.k, d: f.d, a: 0, hs: f.hs, adr: null, kast: null, rounds: 0, hsk: Math.round(f.k * f.hs / 100), dmg: 0 };
-  }
+  const lineOf = (m) => m.line || { k: 0, d: 0, a: 0, hs: 0, adr: null, acc: 0 };
+  const isMatch = (m) => m.type === "match";
   // ---------- "Check for new matches" (only when served by the laptop, which has /api/*) ----------
   const timeAgo = (iso) => { if (!iso) return ""; const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; };
   function showCheck(st) {
@@ -419,11 +515,10 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
 
   // ---------- Steam lifetime (steam.json = data/steam/latest.json from the repo's daily job) ----------
   let STEAM = null;
-  fetch("steam.json").then(r => r.ok ? r.json() : null).then(j => { STEAM = j; if (DATA) renderSteam(); }).catch(() => {});
+  fetch("steam.json", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(j => { STEAM = j; if (INDEX) renderSteam(); }).catch(() => {});
   const nf = (n) => n == null ? "—" : Number(n).toLocaleString("en-US");
   const WEAP = { ak47: "AK-47", m4a1: "M4A4/M4A1-S", awp: "AWP", deagle: "Deagle", glock: "Glock", hkp2000: "USP/P2000", p250: "P250", mp9: "MP9", mac10: "MAC-10", famas: "FAMAS", galilar: "Galil", sg556: "SG 553", aug: "AUG", ssg08: "Scout", ump45: "UMP-45", p90: "P90", fiveseven: "Five-SeveN", tec9: "Tec-9", elite: "Dualies", xm1014: "XM1014", nova: "Nova", mag7: "MAG-7", negev: "Negev", m249: "M249", bizon: "Bizon", mp7: "MP7", scar20: "SCAR-20", g3sg1: "G3SG1", sawedoff: "Sawed-Off", knife: "Knife", hegrenade: "HE", molotov: "Molotov", taser: "Zeus", revolver: "R8", cz75a: "CZ75" };
   function renderSteam() {
-    $("demoSum").textContent = `${DATA.demos.filter(x => x.type === "match").length} demo matches · ${DATA.demos.filter(x => x.type !== "match").length} practice`;
     if (!STEAM || !STEAM.stats) {
       $("steamWhen").textContent = "";
       $("steam").innerHTML = `<div class="empty"><b>Waiting for your first Steam stats</b>
@@ -457,141 +552,186 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
     const mBars = maps.map(x => { const r = x.wins / x.rounds; return `<div class="bar"><span class="nm">${esc(x.m.replace(/^(de|cs|ar)_/, ""))}</span><span class="tr"><div style="width:${r * 100}%;background:${r >= 0.5 ? "var(--good)" : "var(--ct)"}"></div></span><span class="vv">${Math.round(r * 100)}% · ${nf(x.rounds)} rds</span></div>`; }).join("");
     $("steamWhen").textContent = `updated ${new Date(STEAM.fetched_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
     $("steam").innerHTML = `<div class="career">${tiles.join("")}</div>
-      <div class="steam-grid">
-        ${weapons.length ? `<div class="panel"><h2>Top weapons <span class="h2sub">kills · accuracy</span></h2><div class="bars">${wBars}</div></div>` : ""}
-        ${maps.length ? `<div class="panel"><h2>Maps <span class="h2sub">round win % · rounds</span></h2><div class="bars">${mBars}</div></div>` : ""}
-      </div>
-      <p class="note">From Steam's lifetime counters for CS2 (app 730). Some of them may date back to CS:GO or not update every CS2 mode, so compare them with your demo stats rather than reading them as exact.</p>`;
+      <details class="more" id="moreSteam"><summary>Weapons &amp; maps</summary>
+        <div class="steam-grid">
+          ${weapons.length ? `<div class="panel"><h2>Top weapons <span class="h2sub">kills · accuracy</span></h2><div class="bars">${wBars}</div></div>` : ""}
+          ${maps.length ? `<div class="panel"><h2>Maps <span class="h2sub">round win % · rounds</span></h2><div class="bars">${mBars}</div></div>` : ""}
+        </div>
+        <p class="note">From Steam's lifetime counters for CS2 (app 730). Some may date back to CS:GO or not update in every mode, so treat them as the big picture.</p>
+      </details>`;
   }
 
-  let groupMode = "day";
-  function weekStart(dt) { const x = new Date(dt); const off = (x.getDay() + 6) % 7; x.setDate(x.getDate() - off); return x; }
+  // ---------- history: Matches / Practice, Week calendar, Month summary ----------
+  const MATCH_CATS = ["Premier / Competitive", "Wingman", "FACEIT", "Other match"];
+  const PRACTICE_CATS = ["Prefire", "Movement", "Aim training", "Refrag", "Bots", "Other practice"];
+  const H = { kind: "match", view: "week", cat: "All", anchor: null, day: null };
+  const weekStart = (dt) => { const x = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x; };
+  const addDays = (dt, n) => { const x = new Date(dt); x.setDate(x.getDate() + n); return x; };
+  const ymd = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
   const short = (dt) => `${MONTHS[dt.getMonth()].slice(0, 3)} ${dt.getDate()}`;
-  function renderHistory() {
-    const list = DATA.demos.map((dm, i) => ({ dm, i, dt: dateOf(dm) }));
-    $("histSub").textContent = `${DATA.demos.filter(x => x.type === "match").length} matches · ${DATA.demos.filter(x => x.type !== "match").length} practice`;
-    // newest year / month / group first; inside a group the oldest game is Match 1
-    const years = [...new Set(list.map(x => x.dt.getFullYear()))].sort((a, b) => b - a);
-    let html = "";
-    for (const y of years) {
-      html += `<h2 class="yr">${y}</h2>`;
-      const inY = list.filter(x => x.dt.getFullYear() === y);
-      const months = [...new Set(inY.map(x => x.dt.getMonth()))].sort((a, b) => b - a);
-      for (const m of months) {
-        const inM = inY.filter(x => x.dt.getMonth() === m);
-        html += `<div class="mo">${MONTHS[m]} <span>${inM.length} game${inM.length === 1 ? "" : "s"}</span></div>`;
-        const keyOf = (x) => groupMode === "day" ? x.dm.date : groupMode === "week" ? weekStart(x.dt).toDateString() : "month";
-        const keys = [...new Set(inM.map(keyOf))];
-        keys.sort((a, b) => { const fa = inM.find(x => keyOf(x) === a).dt, fb = inM.find(x => keyOf(x) === b).dt; return fb - fa; });
-        for (const key of keys) {
-          const games = inM.filter(x => keyOf(x) === key).sort((a, b) => (a.dm.date + a.dm.time).localeCompare(b.dm.date + b.dm.time));
-          const first = games[0].dt;
-          let title = "";
-          if (groupMode === "day") title = `${DAYS[first.getDay()]}, ${short(first)}`;
-          else if (groupMode === "week") { const ws = weekStart(first), we = new Date(ws); we.setDate(ws.getDate() + 6); title = `Week of ${short(ws)} – ${short(we)}`; }
-          else title = `All of ${MONTHS[m]}`;
-          const mc = games.filter(g => g.dm.type === "match").length;
-          html += `<div class="grp"><div class="grp-h"><b>${esc(title)}</b><span>${mc} match${mc === 1 ? "" : "es"} · ${games.length - mc} practice</span></div>`;
-          games.forEach((g, n) => {
-            const L = lineOf(g.dm), r = resultOf(g.dm);
-            const res = r ? `<span class="res ${r === "W" ? "win" : r === "L" ? "loss" : "draw"}">${r} ${g.dm.score[0]}–${g.dm.score[1]}</span>` : `<span class="res draw">—</span>`;
-            html += `<div class="mrow">
-              <span class="n">Match ${n + 1}</span>
-              <span class="tm">${groupMode === "day" ? esc(g.dm.time) : esc(short(g.dt))}</span>
-              <span class="lbl">${esc(g.dm.label)}${g.dm.type !== "match" ? '<span class="tag">practice</span>' : ""}<small>${esc(g.dm.map)} · ${Math.floor((g.dm.duration || 0) / 60)}:${String((g.dm.duration || 0) % 60).padStart(2, "0")}</small></span>
-              ${res}
-              <span class="nums"><span><b>${L.k}-${L.d}-${L.a}</b> K-D-A</span>${L.adr != null ? `<span><b>${L.adr}</b> ADR</span>` : ""}<span><b>${L.hs}%</b> HS</span></span>
-              <button data-open="${g.i}-0">Open</button>
-            </div>`;
-          });
-          html += `</div>`;
-        }
-      }
-    }
-    $("historyList").innerHTML = html || '<p class="none">No games yet.</p>';
-    $("historyList").querySelectorAll("[data-open]").forEach(b => b.onclick = () => { location.hash = `demo-${b.dataset.open.split("-")[0]}`; });
+  const noun = (n) => H.kind === "match" ? `match${n === 1 ? "" : "es"}` : `session${n === 1 ? "" : "s"}`;
+  const shown = () => INDEX.filter(m => (H.kind === "match") === isMatch(m) && (H.cat === "All" || m.category === H.cat));
+  const resChip = (m) => { const r = resultOf(m); return r ? `<span class="res ${r === "W" ? "win" : r === "L" ? "loss" : "draw"}">${r} ${m.score[0]}–${m.score[1]}</span>` : `<span class="res draw">${esc(m.category || "")}</span>`; };
+
+  function renderCats() {
+    const pool = INDEX.filter(m => (H.kind === "match") === isMatch(m));
+    const cats = ["All", ...(H.kind === "match" ? MATCH_CATS : PRACTICE_CATS)];
+    $("cats").innerHTML = cats.map(c => { const n = c === "All" ? pool.length : pool.filter(m => m.category === c).length;
+      return `<button data-cat="${esc(c)}" aria-pressed="${c === H.cat}" class="${n ? "" : "zero"}">${esc(c)} <span>${n}</span></button>`; }).join("");
+    $("cats").querySelectorAll("[data-cat]").forEach(b => b.onclick = () => { H.cat = b.dataset.cat; H.day = null; renderHistory(); });
   }
-  document.querySelectorAll("[data-group]").forEach(b => b.onclick = () => {
-    groupMode = b.dataset.group;
-    document.querySelectorAll("[data-group]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
-    renderHistory();
-  });
+  function rowsHtml(list, numberLabel) {
+    return list.map((m, n) => { const L = lineOf(m);
+      return `<div class="mrow">
+        <span class="n">${numberLabel} ${n + 1}</span>
+        <span class="tm">${esc(m.time)}</span>
+        <span class="lbl">${esc(m.map.replace(/^(de|cs|ar)_/, ""))}<small>${esc(m.category || "")} · ${Math.floor((m.duration || 0) / 60)} min</small></span>
+        ${resChip(m)}
+        <span class="nums"><span><b>${L.k}-${L.d}-${L.a}</b> K-D-A</span>${L.adr != null ? `<span><b>${L.adr}</b> ADR</span>` : ""}<span><b>${L.hs}%</b> HS</span></span>
+        <button data-open="${safeId(m.id)}">Open</button>
+      </div>`; }).join("");
+  }
+  function wireOpen(el) { el.querySelectorAll("[data-open]").forEach(b => b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); location.hash = "m-" + b.dataset.open; }); }
+
+  function renderHistory() {
+    if (!H.anchor) H.anchor = new Date();
+    $("histTitle").textContent = H.kind === "match" ? "Matches" : "Practice";
+    const all = shown();
+    $("histSub").textContent = `${all.length} ${noun(all.length)}${H.cat !== "All" ? " · " + H.cat : ""} in total`;
+    document.querySelectorAll("[data-kind]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.kind === H.kind)));
+    document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.view === H.view)));
+    $("todayP").textContent = H.view === "week" ? "This week" : "This month";
+    renderCats();
+    const count = (d) => all.filter(m => m.date === ymd(d));
+    const label = H.kind === "match" ? "Match" : "Session";
+    if (H.view === "week") {
+      const ws = weekStart(H.anchor), we = addDays(ws, 6), today = ymd(new Date());
+      const inWeek = all.filter(m => m.date >= ymd(ws) && m.date <= ymd(we));
+      const w = inWeek.filter(m => resultOf(m) === "W").length, l = inWeek.filter(m => resultOf(m) === "L").length;
+      $("periodLabel").textContent = `${short(ws)} – ${short(we)}, ${we.getFullYear()}`;
+      $("periodTotal").innerHTML = `<b>${inWeek.length}</b> ${noun(inWeek.length)} this week${H.kind === "match" && inWeek.length ? ` · <span class="win">${w}W</span> <span class="loss">${l}L</span>` : ""}`;
+      if (H.day == null || H.day < ymd(ws) || H.day > ymd(we)) { const withGames = inWeek.map(m => m.date).sort(); H.day = withGames.length ? withGames[withGames.length - 1] : null; }
+      $("calendar").innerHTML = `<div class="week">${[0, 1, 2, 3, 4, 5, 6].map(i => { const d = addDays(ws, i), games = count(d), key = ymd(d);
+        const dots = games.slice(0, 12).map(m => { const r = resultOf(m); return `<i class="${r === "W" ? "dw" : r === "L" ? "dl" : "dn"}"></i>`; }).join("");
+        return `<button class="day${games.length ? " has" : ""}${key === today ? " today" : ""}${key === H.day ? " sel" : ""}" data-day="${key}" ${games.length ? "" : "aria-disabled=\"true\""}>
+          <span class="dname">${DAYS[d.getDay()]}</span><span class="dnum">${d.getDate()}</span>
+          <span class="dcount">${games.length || ""}</span><span class="dlabel">${games.length ? noun(games.length) : ""}</span>
+          <span class="dots">${dots}</span></button>`; }).join("")}</div>`;
+      $("calendar").querySelectorAll("[data-day]").forEach(b => b.onclick = () => { H.day = b.dataset.day; renderHistory(); });
+      const dayGames = H.day ? all.filter(m => m.date === H.day).sort((a, b) => a.time.localeCompare(b.time)) : [];
+      if (dayGames.length) { const d = dateOf({ date: H.day });
+        $("dayList").innerHTML = `<div class="grp"><div class="grp-h"><b>${DAYS[d.getDay()]}, ${short(d)}</b><span>${dayGames.length} ${noun(dayGames.length)}</span></div>${rowsHtml(dayGames, label)}</div>`;
+        wireOpen($("dayList"));
+      } else $("dayList").innerHTML = inWeek.length ? "" : emptyHint();
+    } else {
+      const y = H.anchor.getFullYear(), mo = H.anchor.getMonth(), first = new Date(y, mo, 1), last = new Date(y, mo + 1, 0);
+      const inMonth = all.filter(m => { const d = dateOf(m); return d.getFullYear() === y && d.getMonth() === mo; });
+      const w = inMonth.filter(m => resultOf(m) === "W").length, l = inMonth.filter(m => resultOf(m) === "L").length;
+      $("periodLabel").textContent = `${MONTHS[mo]} ${y}`;
+      $("periodTotal").innerHTML = `<b>${inMonth.length}</b> ${noun(inMonth.length)} this month${H.kind === "match" && inMonth.length ? ` · <span class="win">${w}W</span> <span class="loss">${l}L</span>` : ""}`;
+      const weeks = []; for (let ws = weekStart(first); ws <= last; ws = addDays(ws, 7)) weeks.push(ws);
+      const counts = weeks.map(ws => inMonth.filter(m => m.date >= ymd(ws) && m.date <= ymd(addDays(ws, 6))));
+      const max = Math.max(1, ...counts.map(c => c.length));
+      $("calendar").innerHTML = `<div class="weeks">${weeks.map((ws, i) => { const g = counts[i], we = addDays(ws, 6);
+        const ww = g.filter(m => resultOf(m) === "W").length, ll = g.filter(m => resultOf(m) === "L").length;
+        const from = ws < first ? first : ws, to = we > last ? last : we;
+        return `<button class="wk${g.length ? " has" : ""}" data-week="${ymd(ws)}">
+          <span class="wn">Week ${i + 1}</span><span class="wr">${short(from)} – ${short(to)}</span>
+          <span class="wbar"><span style="width:${g.length / max * 100}%"></span></span>
+          <span class="wc"><b>${g.length}</b> ${noun(g.length)}${H.kind === "match" && g.length ? ` · <span class="win">${ww}W</span> <span class="loss">${ll}L</span>` : ""}</span></button>`; }).join("")}</div>`;
+      $("calendar").querySelectorAll("[data-week]").forEach(b => b.onclick = () => { H.view = "week"; H.anchor = dateOf({ date: b.dataset.week }); H.day = null; renderHistory(); });
+      $("dayList").innerHTML = inMonth.length ? "" : emptyHint();
+    }
+  }
+  function emptyHint() {
+    const all = shown(); if (!all.length) return `<p class="none hint">No ${H.kind === "match" ? "matches" : "practice"} yet${H.cat !== "All" ? " in " + esc(H.cat) : ""}.</p>`;
+    const lastM = all[all.length - 1];
+    return `<p class="none hint">Nothing in this ${H.view}. <button id="jumpLast">Jump to your latest (${esc(short(dateOf(lastM)))})</button></p>`;
+  }
+  document.addEventListener("click", (e) => { if (e.target && e.target.id === "jumpLast") { const all = shown(); H.anchor = dateOf(all[all.length - 1]); H.day = null; renderHistory(); } });
+  $("prevP").onclick = () => { H.anchor = H.view === "week" ? addDays(weekStart(H.anchor), -7) : new Date(H.anchor.getFullYear(), H.anchor.getMonth() - 1, 1); H.day = null; renderHistory(); };
+  $("nextP").onclick = () => { H.anchor = H.view === "week" ? addDays(weekStart(H.anchor), 7) : new Date(H.anchor.getFullYear(), H.anchor.getMonth() + 1, 1); H.day = null; renderHistory(); };
+  $("todayP").onclick = () => { H.anchor = new Date(); H.day = null; renderHistory(); };
+  document.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => { location.hash = b.dataset.kind === "match" ? "history" : "practice"; });
+  document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { H.view = b.dataset.view; H.day = null; renderHistory(); });
   document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { location.hash = b.dataset.go; route(); });
 
-  // ---------- menu + routing (#history, #demo-0, #demo-0-r2; no hash = home) ----------
+  // ---------- home ----------
   function renderMenu() {
     renderSteam();
-    const order = DATA.demos.map((dm, i) => i).reverse().slice(0, 6); // newest first
-    $("cards").innerHTML = order.map(i => DATA.demos[i]).map((dm, q) => { const i = order[q];
-      const s = statsOf(dm);
-      const segBtns = dm.segments.map((sg, j) => `<button data-open="${i}-${j}">${esc(sg.label)}</button>`).join("");
-      const res = dm.segments.filter(x => x.winner).map(x => {
-        const won = (x.winner === "counter-terrorist" ? 3 : 2) === x.myTeam;
-        return `<span style="color:var(${won ? "--good" : "--kill"})">${won ? "W" : "L"}</span>`;
-      }).join(" ");
-      return `<article class="card">
-        <div class="top"><h3>${esc(dm.label)}</h3><span class="meta">${esc(dm.map)}</span></div>
-        <div class="thumb"><canvas data-thumb="${i}"></canvas></div>
-        <div class="mini"><span><b>${s.k}</b>K</span><span><b>${s.d}</b>D</span><span><b>${s.hs}%</b>HS</span><span><b>${s.acc}%</b>hit</span>${s.adr != null ? `<span><b>${s.adr}</b>ADR</span>` : ""}${res ? `<span>${res}</span>` : ""}</div>
-        <div class="go"><button class="primary" data-open="${i}-0">Open replay</button>${dm.segments.length > 1 ? segBtns : ""}</div>
-        <div class="meta">${esc(dm.file)}</div>
-      </article>`;
-    }).join("") + `<div class="add-note"><b>Add a demo</b><span>Send Claude a <code>.dem</code> file in chat: a real match from Watch → Your Matches, or a quick bot game recorded with <code>exec coach</code>.</span></div>`;
-    $("cards").querySelectorAll("[data-open]").forEach(b => b.onclick = () => {
-      const [i, j] = b.dataset.open.split("-").map(Number);
-      location.hash = j ? `demo-${i}-r${j + 1}` : `demo-${i}`;
-    });
-    drawThumbs();
+    const ms = INDEX.filter(isMatch), pr = INDEX.filter(m => !isMatch(m));
+    $("demoSum").textContent = `${ms.length} ${ms.length === 1 ? "match" : "matches"} · ${pr.length} practice`;
+    const recent = [...ms].reverse().slice(0, 5), lastPr = pr[pr.length - 1];
+    const rec = (m) => { const L = lineOf(m), d = dateOf(m);
+      return `<details class="rec" data-id="${esc(m.id)}"><summary>
+          <span class="rd">${DAYS[d.getDay()]} ${esc(short(d))}<small>${esc(m.time)}</small></span>
+          <span class="rm">${esc(m.map.replace(/^(de|cs|ar)_/, ""))}<small>${esc(m.category || "")}</small></span>
+          ${resChip(m)}
+          <button class="open" data-open="${safeId(m.id)}">Open</button>
+        </summary>
+        <div class="rec-body">
+          <canvas data-thumb="${esc(m.id)}"></canvas>
+          <div class="mini"><span><b>${L.k}-${L.d}-${L.a}</b> K-D-A</span>${L.adr != null ? `<span><b>${L.adr}</b> ADR</span>` : ""}${L.kast != null ? `<span><b>${L.kast}%</b> KAST</span>` : ""}<span><b>${L.hs}%</b> HS</span><span><b>${L.acc}%</b> shots hit</span></div>
+          ${m.segs.length > 1 ? `<div class="go">${m.segs.map((sg, j) => `<button data-open="${safeId(m.id)}-round-${j + 1}">${esc(sg.label.replace("Round ", "R"))}</button>`).join("")}</div>` : ""}
+        </div></details>`; };
+    $("recent").innerHTML = (recent.length ? recent.map(rec).join("") : `<p class="none">No matches yet.</p>`) +
+      (lastPr ? `<div class="sub-h">Latest practice</div>${rec(lastPr)}` : "");
+    wireOpen($("recent"));
+    $("recent").querySelectorAll("details.rec").forEach(d => d.addEventListener("toggle", () => { if (d.open) drawThumb(d.querySelector("canvas")); }));
   }
-  function drawThumbs() {
-    $("cards").querySelectorAll("canvas[data-thumb]").forEach(c => {
-      const dm = DATA.demos[+c.dataset.thumb], r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
-      c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr);
-      const g = c.getContext("2d"); g.fillStyle = "#0a0f14"; g.fillRect(0, 0, c.width, c.height);
-      // your path across every segment, fitted to the card
-      const pts = []; for (const s of dm.segments) { const p = s.players[dm.me]; if (!p) continue; const run = []; for (let k = 0; k < p.x.length; k++) { if (p.x[k] != null && p.hp[k] > 0) run.push([p.x[k], p.y[k]]); else if (run.length) { pts.push(run.splice(0)); } } if (run.length) pts.push(run); }
-      const b = dm.bounds, pad = 200, sx = c.width / (b.maxX - b.minX + 2 * pad), sy = c.height / (b.maxY - b.minY + 2 * pad), sc = Math.min(sx, sy);
-      const ox = (c.width - (b.maxX - b.minX + 2 * pad) * sc) / 2, oy = (c.height - (b.maxY - b.minY + 2 * pad) * sc) / 2;
-      const P = (x, y) => [ox + (x - b.minX + pad) * sc, c.height - (oy + (y - b.minY + pad) * sc)];
-      const draw1 = (img) => {
-        if (img) {
-          const R = dm.radar, span = 1024 * R.scale; const [x0, y0] = P(R.pos_x, R.pos_y); g.globalAlpha = 0.5; g.drawImage(img, x0, y0, span * sc, span * sc); g.globalAlpha = 1;
-        }
-        g.lineWidth = Math.max(1.5, c.width / 300); g.strokeStyle = "#f4f7fa"; g.lineJoin = "round";
-        for (const run of pts) { if (run.length < 2) continue; g.beginPath(); run.forEach(([x, y], q) => { const [px, py] = P(x, y); q ? g.lineTo(px, py) : g.moveTo(px, py); }); g.stroke(); }
-        for (const s of dm.segments) for (const k of s.kills) { if (k.att !== dm.me || k.vic === dm.me || k.ax == null) continue; const [px, py] = P(k.ax, k.ay); g.fillStyle = "#59c08a"; g.beginPath(); g.arc(px, py, Math.max(2.5, c.width / 160), 0, 7); g.fill(); }
-      };
-      if (dm.radar) { const im = new Image(); im.onload = () => { g.fillStyle = "#0a0f14"; g.fillRect(0, 0, c.width, c.height); draw1(im); }; im.onerror = () => draw1(null); im.src = dm.radar.file; draw1(null); }
-      else draw1(null);
-    });
+  const radarImgs = {};
+  function drawThumb(c) {
+    const m = INDEX.find(x => x.id === c.dataset.thumb); if (!m || !m.thumb) return;
+    const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr);
+    const g = c.getContext("2d"), t = m.thumb, b = t.bounds, pad = 200;
+    const sc = Math.min(c.width / (b.maxX - b.minX + 2 * pad), c.height / (b.maxY - b.minY + 2 * pad));
+    const ox = (c.width - (b.maxX - b.minX + 2 * pad) * sc) / 2, oy = (c.height - (b.maxY - b.minY + 2 * pad) * sc) / 2;
+    const P = (x, y) => [ox + (x - b.minX + pad) * sc, c.height - (oy + (y - b.minY + pad) * sc)];
+    const paint = (img) => {
+      g.fillStyle = "#0a0f14"; g.fillRect(0, 0, c.width, c.height);
+      if (img) { const R = t.radar, span = 1024 * R.scale, [x0, y0] = P(R.pos_x, R.pos_y); g.globalAlpha = 0.5; g.drawImage(img, x0, y0, span * sc, span * sc); g.globalAlpha = 1; }
+      g.lineWidth = Math.max(1.5, c.width / 300); g.strokeStyle = "rgba(244,247,250,.85)"; g.lineJoin = "round";
+      for (const run of t.path) { g.beginPath(); run.forEach(([x, y], q) => { const [px, py] = P(x, y); q ? g.lineTo(px, py) : g.moveTo(px, py); }); g.stroke(); }
+      g.fillStyle = "#59c08a"; for (const [x, y] of t.kills) { const [px, py] = P(x, y); g.beginPath(); g.arc(px, py, Math.max(2.5, c.width / 160), 0, 7); g.fill(); }
+    };
+    if (t.radar) { const src = t.radar.file; if (!radarImgs[src]) { radarImgs[src] = new Image(); radarImgs[src].src = src; }
+      const im = radarImgs[src]; if (im.complete && im.naturalWidth) paint(im); else { paint(null); im.addEventListener("load", () => paint(im), { once: true }); } }
+    else paint(null);
   }
-  function route() {
-    const m = /^#demo-(\d+)(?:-r(\d+))?$/.exec(location.hash);
-    if (!DATA) return;
-    if (location.hash === "#history") {
-      pause(); $("replayView").hidden = true; $("menuView").hidden = true; $("historyView").hidden = false; renderHistory(); window.scrollTo(0, 0); return;
+
+  // ---------- routing: (none) home · #history · #practice · #m-<id> · #m-<id>-round-N ----------
+  async function route() {
+    if (!INDEX) return;
+    const h = location.hash.replace(/^#/, "");
+    const show = (v) => { for (const id of ["menuView", "historyView", "replayView"]) $(id).hidden = id !== v; };
+    if (h === "history" || h === "practice") {
+      pause(); const kind = h === "history" ? "match" : "practice";
+      if (H.kind !== kind) { H.kind = kind; H.cat = "All"; H.day = null; }
+      show("historyView"); renderHistory(); window.scrollTo(0, 0); return;
     }
-    $("historyView").hidden = true;
-    if (!m || !DATA.demos[+m[1]]) {
-      pause(); $("replayView").hidden = true; $("menuView").hidden = false; requestAnimationFrame(drawThumbs); return;
+    const mm = /^m-(.+?)(?:-round-(\d+))?$/.exec(h);
+    const m = mm && byHash(mm[1]);
+    if (!m) { pause(); show("menuView"); return; }
+    show("replayView"); window.scrollTo(0, 0);
+    const j = mm[2] ? +mm[2] - 1 : 0;
+    if (!demo || demo.id !== m.id) {
+      $("demoTitle").textContent = m.label + " · loading…"; $("sub").textContent = "";
+      try { const full = await loadDemo(m); full.id = full.id || m.id; selectDemo(full); }
+      catch (e) { $("demoTitle").textContent = `Couldn't load this demo (${e.message}).`; return; }
     }
-    $("menuView").hidden = true; $("replayView").hidden = false;
-    const i = +m[1], j = m[2] ? Math.max(0, Math.min(DATA.demos[i].segments.length - 1, +m[2] - 1)) : 0;
-    if (demo !== DATA.demos[i]) selectDemo(i);
-    selectSeg(j);
+    selectSeg(Math.max(0, Math.min(demo.segments.length - 1, j)));
     requestAnimationFrame(resize);
-    window.scrollTo(0, 0);
   }
   window.addEventListener("hashchange", route);
   $("toMenu").onclick = () => { location.hash = ""; route(); };
 
-  function selectDemo(i) {
-    demo = DATA.demos[i];
-    $("demoTitle").textContent = demo.label;
-    $("segTabs").innerHTML = demo.segments.map((s, j) => `<button data-seg="${j}" aria-pressed="false">${esc(s.label)}</button>`).join("");
-    $("segTabs").querySelectorAll("button").forEach(b => b.onclick = () => { location.hash = `demo-${i}-r${+b.dataset.seg + 1}`; });
+  function selectDemo(full) {
+    demo = full;
+    $("demoTitle").textContent = `${demo.map.replace(/^(de|cs|ar)_/, "")} · ${demo.category || demo.label}`;
+    $("segTabs").innerHTML = demo.segments.map((s, j) => `<button data-seg="${j}" aria-pressed="false">${esc(s.label.replace("Round ", "R"))}</button>`).join("");
+    $("segTabs").querySelectorAll("button").forEach(b => b.onclick = () => { location.hash = `m-${safeId(demo.id)}-round-${+b.dataset.seg + 1}`; });
     buildView(); buildBackground(); renderStats();
-    selectSeg(0);
   }
 
   function selectSeg(j) {
