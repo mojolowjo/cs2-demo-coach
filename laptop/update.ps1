@@ -27,7 +27,11 @@ try {
     else { Log "npm not found; Node packages not updated" }
   }
   & (Join-Path $Root ".venv\Scripts\python.exe") "$App\laptop\cs2room.py" build | Out-Null
-  Log "app refreshed from GitHub, site rebuilt"
+  # restart the always-on tasks so they run the new code
+  foreach ($t in "CS2Room site", "CS2Room listener") {
+    Stop-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue; Start-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
+  }
+  Log "app refreshed from GitHub, site rebuilt, server restarted"
   Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
   Log "ERROR: $($_.Exception.Message)"

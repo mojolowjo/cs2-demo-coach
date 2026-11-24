@@ -26,6 +26,7 @@ Copy each attached demo into its own folder in the scratchpad. Run scripts with 
 - `tools/export_replay.py OUT/demos.json [--merge OLD/demos.json] --demo "Label" DEMO.dem "YYYY-MM-DD HH:MM" [...] [--type practice]`
   Builds the data for the replay page (positions, wall check, shots, awpy stats, score, date) and copies `radar_<map>.png` next to it.
   WHEN is the local date/time the game was played (ask m0j or use the chat time); it drives the match history.
+- `tools/duels.py`: ping, TrueView screen delay per player, fight detection (who peeked, head start, reaction, outcome).
 - `replay/index.html`: **m0j's CS2 ROOM** (published artifact: https://claude.ai/artifact/VNDU3fgne8WG5TGgzpZ2rY).
   Home (career stats, recent games) → Match history (`#history`: Year → Month → Day/Week/Month groups, numbered Match 1, 2, 3 within
   each group) → replay (`#demo-N`, `#demo-N-rK`) with radar / "your eyes" (wall check) views, "what you knew", kill feed, shot table,
@@ -41,6 +42,7 @@ Copy each attached demo into its own folder in the scratchpad. Run scripts with 
 m0j's Windows laptop runs everything locally: see `laptop/README.md`. Its match history lives in
 `C:\Users\mojol\Documents\CS2Room\data\demos.json`, not in this repo, and it gets code updates from this repo every 6 hours.
 When this chat is linked to the laptop, read `CS2Room\logs\cs2room.log` first when something seems off.
+After changing the tools, archived demos can be rebuilt with `cs2room.py reprocess` (keeps labels/dates).
 
 ## The public site (backup copy)
 **https://mojolowjo.github.io/cs2-demo-coach/** is built by `.github/workflows/pages.yml` from `replay/index.html`,

@@ -54,6 +54,7 @@ def summarize(dd):
     return {"id": dd["id"], "label": dd["label"], "file": dd["file"], "date": dd["date"], "time": dd["time"], "map": dd["map"],
             "type": dd["type"], "category": dd.get("category"), "server": dd.get("server"), "score": dd.get("score"),
             "duration": dd.get("duration"), "me": me, "stats": dd.get("stats"), "line": line,
+            "fights": dd.get("fights"), "lobbyDelay": dd.get("lobbyDelay"),
             "segs": [{"label": sg["label"], "winner": sg["winner"], "myTeam": sg["myTeam"]} for sg in dd["segments"]],
             "thumb": {"bounds": dd["bounds"], "radar": dd.get("radar"), "path": path, "kills": kills}}
 

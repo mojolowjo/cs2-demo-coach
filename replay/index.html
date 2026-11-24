@@ -192,6 +192,13 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
 .mrow .nums b { color: var(--fg); }
 .tag { display: inline-block; font-family: var(--f-mono); font-size: 10.5px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; vertical-align: 1px; }
 .win { color: var(--good); } .loss { color: var(--kill); } .draw { color: var(--muted); }
+/* fights */
+.fights-panel table td small, #fightsTrend td small { color: var(--muted); margin-left: 4px; }
+.pov-btn { padding: 3px 8px; font-size: 11.5px; }
+#fightsTrend { margin-top: 10px; }
+#fightsTrend tbody tr { cursor: pointer; }
+#fightsTrend tr.tot td { border-top: 1px solid var(--line); font-weight: 600; cursor: default; }
+td.win, .win { color: var(--good); } td.loss, .loss { color: var(--kill); } td.draw { color: var(--muted); }
 /* home: collapsible extras + compact recent list */
 details.more { margin-top: 10px; }
 details.more > summary, details.rec > summary { cursor: pointer; list-style: none; }
@@ -292,6 +299,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
       <h2>Steam lifetime <span class="h2sub" id="steamWhen"></span></h2>
       <div id="steam"></div>
     </section>
+    <details class="more" id="fightsHome"><summary>Fights &amp; ping by match</summary><div id="fightsTrend"></div></details>
     <section class="recent-wrap">
       <h2>Recent <span class="h2sub" id="demoSum"></span></h2>
       <div class="recent" id="recent"><div class="loading">Loading…</div></div>
@@ -353,6 +361,9 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
         <button id="tg-cone" aria-pressed="true">View cone</button>
         <button id="tg-sound" aria-pressed="true">Sounds</button>
         <button id="tg-trail" aria-pressed="true">Trails</button>
+        <span style="margin-left:10px">View:</span>
+        <button id="pov-server" data-pov="server" aria-pressed="true">Server</button>
+        <button id="pov-screen" data-pov="screen" aria-pressed="false" title="Where your screen showed everyone (TrueView data)">Your screen</button>
       </div>
       <div class="radar-box">
         <canvas id="radar" aria-label="Top-down replay"></canvas>
@@ -405,6 +416,17 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     </aside>
   </section>
 
+  <section class="panel fights-panel">
+    <h2>Fights this round <span class="h2sub" id="fightSum"></span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>Enemy</th><th>Who peeked</th><th>Your delay</th><th>His delay</th><th>Head start</th><th>Your shot</th><th>Flick</th><th>Result</th><th></th></tr></thead>
+        <tbody id="fights"></tbody>
+      </table>
+    </div>
+    <p class="note">A fight starts when a clear line opens between you and him and someone shoots. “Delay” = how far behind the server each screen was (ping + smoothing), from the demo’s TrueView data. Head start is an estimate: + you saw him first, − he saw you first. Click a row to jump there (Shift+click: exact moment). “Your screen” shows where your screen had everyone at that moment.</p>
+  </section>
+
   <section class="lower">
     <div class="panel">
       <h2>Your shots</h2>
@@ -416,7 +438,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
           <tbody id="shots"></tbody>
         </table>
       </div>
-      <p class="note">Click a row to jump there. Crosshair bar: green band = his body width from your view, white line = where you aimed (left/right). Inaccuracy in <span class="hot">amber</span> = above your fresh-shot level for that gun. Treat about ±0.5° as measurement noise. Pitch above 0 = aimed above head level.</p>
+      <p class="note">Click a row to jump just before the shot (Shift+click: the exact moment). Crosshair bar: green band = his body width from your view, white line = where you aimed (left/right). Inaccuracy in <span class="hot">amber</span> = above your fresh-shot level for that gun. Treat about ±0.5° as measurement noise. Pitch above 0 = aimed above head level.</p>
     </div>
     <div class="panel coach">
       <h2>Coach notes</h2>
@@ -458,7 +480,9 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     }
   };
 
-  let demo, seg, tick = 0, playing = false, speed = 1, mode = "all";
+  let demo, seg, tick = 0, playing = false, speed = 1, mode = "all", pov = "server";
+  // "17:48" -> "5:48 PM"
+  const fmt12 = (hm) => { if (!hm) return ""; const [h, m] = hm.split(":").map(Number); return `${(h % 12) || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; };
   const layers = { cone: true, sound: true, trail: true };
   const $ = id => document.getElementById(id);
   const cv = $("radar"), ctx = cv.getContext("2d");
@@ -584,7 +608,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     return list.map((m, n) => { const L = lineOf(m);
       return `<div class="mrow">
         <span class="n">${numberLabel} ${n + 1}</span>
-        <span class="tm">${esc(m.time)}</span>
+        <span class="tm">${esc(fmt12(m.time))}</span>
         <span class="lbl">${esc(m.map.replace(/^(de|cs|ar)_/, ""))}<small>${esc(m.category || "")} · ${Math.floor((m.duration || 0) / 60)} min</small></span>
         ${resChip(m)}
         <span class="nums"><span><b>${L.k}-${L.d}-${L.a}</b> K-D-A</span>${L.adr != null ? `<span><b>${L.adr}</b> ADR</span>` : ""}<span><b>${L.hs}%</b> HS</span></span>
@@ -664,7 +688,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     const recent = [...ms].reverse().slice(0, 5), lastPr = pr[pr.length - 1];
     const rec = (m) => { const L = lineOf(m), d = dateOf(m);
       return `<details class="rec" data-id="${esc(m.id)}"><summary>
-          <span class="rd">${DAYS[d.getDay()]} ${esc(short(d))}<small>${esc(m.time)}</small></span>
+          <span class="rd">${DAYS[d.getDay()]} ${esc(short(d))}<small>${esc(fmt12(m.time))}</small></span>
           <span class="rm">${esc(m.map.replace(/^(de|cs|ar)_/, ""))}<small>${esc(m.category || "")}</small></span>
           ${resChip(m)}
           <button class="open" data-open="${safeId(m.id)}">Open</button>
@@ -677,6 +701,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     $("recent").innerHTML = (recent.length ? recent.map(rec).join("") : `<p class="none">No matches yet.</p>`) +
       (lastPr ? `<div class="sub-h">Latest practice</div>${rec(lastPr)}` : "");
     wireOpen($("recent"));
+    renderFightsTrend();
     $("recent").querySelectorAll("details.rec").forEach(d => d.addEventListener("toggle", () => { if (d.open) drawThumb(d.querySelector("canvas")); }));
   }
   const radarImgs = {};
@@ -727,7 +752,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
   $("toMenu").onclick = () => { location.hash = ""; route(); };
 
   function selectDemo(full) {
-    demo = full;
+    demo = full; setPov("server");
     $("demoTitle").textContent = `${demo.map.replace(/^(de|cs|ar)_/, "")} · ${demo.category || demo.label}`;
     $("segTabs").innerHTML = demo.segments.map((s, j) => `<button data-seg="${j}" aria-pressed="false">${esc(s.label.replace("Round ", "R"))}</button>`).join("");
     $("segTabs").querySelectorAll("button").forEach(b => b.onclick = () => { location.hash = `m-${safeId(demo.id)}-round-${+b.dataset.seg + 1}`; });
@@ -742,7 +767,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     $("sub").textContent = `${demo.file} · ${demo.map} · ${demo.me}${meTeam ? " on " + meTeam : ""}` + (seg.winner ? ` · ${seg.winner === "counter-terrorist" ? "CT" : "T"} won (${seg.reason.replace(/_/g, " ")})` : "");
     tick = Math.max(seg.ticks[0], seg.fe - TICK);
     $("scrub").max = seg.ticks[seg.ticks.length - 1] - seg.ticks[0];
-    renderMarks(); renderFeed(); renderShots(); renderCoach(); draw();
+    renderMarks(); renderFeed(); renderShots(); renderFights(); renderCoach(); draw();
   }
 
   // ---------- geometry ----------
@@ -880,8 +905,10 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     const R = Math.max(5, W() / 95);
     const order = Object.keys(seg.players).sort((a, b) => isMe(a) - isMe(b));
     for (const n of order) {
-      const p = seg.players[n]; const pos = posOf(p, fr); if (!pos) continue;
-      const alive = p.hp[fr.near] > 0;
+      const p = seg.players[n];
+      const pfr = (pov === "screen" && !isMe(n)) ? screenFrame(fr) : fr;
+      const pos = posOf(p, pfr); if (!pos) continue;
+      const alive = p.hp[pfr.near] > 0;
       if (!alive) continue;
       if (!visible(n, fr)) continue;
       const enemy = myTeam && p.team !== myTeam;
@@ -902,7 +929,8 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
       ctx.fillStyle = isMe(n) ? C.you : "rgba(219,227,234,0.75)";
       ctx.fillText(n.replace(/^- /, ""), px + R + 6, py - R);
     }
-    $("clock").textContent = (tick < seg.fe ? "Freeze " : "") + fmt(tick);
+    const myLag = myDelayAt(fr);
+    $("clock").textContent = (tick < seg.fe ? "Freeze " : "") + fmt(tick) + (pov === "screen" ? (myLag != null ? ` · your screen: ${myLag} ms behind` : " · no screen data") : "");
     $("scrub").value = tick - seg.ticks[0];
     renderKnew(fr);
     highlightRows();
@@ -950,7 +978,8 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
       <dt>On radar</dt><dd>${myTeam ? (radar.join("") || '<span class="none">No enemies spotted</span>') : '<span class="none">n/a</span>'}</dd>
       <dt>Clear line</dt><dd>${myTeam ? (eyes.join("") || '<span class="none">Nobody</span>') : '<span class="none">n/a</span>'}</dd>
       <dt>Heard (2s)</dt><dd>${heard.length ? heard.map(esc).join("<br>") : '<span class="none">Nothing nearby</span>'}</dd>
-      <dt>Bomb</dt><dd>${esc(bombTxt)}</dd>`;
+      <dt>Bomb</dt><dd>${esc(bombTxt)}</dd>
+      <dt>Ping</dt><dd>${meP.ping ? `${meP.ping[fr.near] ?? "—"} ms` : "—"}${myDelayAt(fr) != null ? ` · screen ${myDelayAt(fr)} ms behind` : ""}</dd>`;
   }
   function dirWord(dx, dy) {
     const meP = seg.players[demo.me], fr = frameAt(tick), yaw = meP.yaw[fr.near] ?? 0;
@@ -965,7 +994,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
       const nm = (n, c) => n ? `<span class="${c} ${isMe(n) ? "me" : ""}">${esc(n.replace(/^- /, ""))}</span>` : `<span class="w">world</span>`;
       return `<li tabindex="0" data-tick="${k.tick}"><span class="t">${secs(k.tick)}s</span><span>${nm(k.att, ac)} <span class="w">${esc(k.weapon)}</span>${k.hs ? ' <span class="hs">HS</span>' : ""} → ${nm(k.vic, vc)}${k.ast ? ` <span class="w">+ ${esc(k.ast)}</span>` : ""}</span></li>`;
     }).join("") || '<li class="none">No kills in this segment</li>';
-    $("feed").querySelectorAll("li[data-tick]").forEach(li => { const go = () => seek(+li.dataset.tick - 2 * TICK); li.onclick = go; li.onkeydown = e => { if (e.key === "Enter") go(); }; });
+    $("feed").querySelectorAll("li[data-tick]").forEach(li => { const go = (e) => seek(+li.dataset.tick - (e && e.shiftKey ? 0 : 2 * TICK)); li.onclick = go; li.onkeydown = e => { if (e.key === "Enter") go(e); }; });
   }
 
   function renderMarks() {
@@ -995,13 +1024,60 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
         <td>${esc((s.target || "—").replace(/^- /, ""))}</td><td>${s.dist ? s.dist + "u" : "—"}</td><td>${aim}</td>
         <td>${s.pitchOff == null ? "—" : (s.pitchOff > 0 ? "+" : "") + s.pitchOff + "°"}</td><td>${s.tSpeed ?? "—"}</td><td>${res}</td></tr>`;
     }).join("") || `<tr><td colspan="11" class="none">No shots in this segment</td></tr>`;
-    $("shots").querySelectorAll("tr[data-tick]").forEach(tr => { const go = () => { pause(); seek(+tr.dataset.tick - 16); }; tr.onclick = go; tr.onkeydown = e => { if (e.key === "Enter") go(); }; });
+    $("shots").querySelectorAll("tr[data-tick]").forEach(tr => { const go = (e) => { pause(); seek(+tr.dataset.tick - (e && e.shiftKey ? 0 : 16)); }; tr.onclick = go; tr.onkeydown = e => { if (e.key === "Enter") go(e); }; });
   }
   function highlightRows() {
     let cur = null;
     for (const tr of $("shots").querySelectorAll("tr[data-tick]")) { if (+tr.dataset.tick <= tick + 2) cur = tr; tr.classList.remove("current"); }
     if (cur && tick - +cur.dataset.tick < 40) cur.classList.add("current");
     for (const li of $("feed").querySelectorAll("li[data-tick]")) li.className = +li.dataset.tick <= tick ? "past" : "future";
+  }
+
+  // ---------- your screen (TrueView) ----------
+  function myDelayAt(fr) { const p = demo && seg.players[demo.me]; const v = p && p.lag ? p.lag[fr.near] : null; return v == null ? null : v; }
+  function screenFrame(fr) {
+    const d = myDelayAt(fr); if (d == null) return fr;
+    return frameAt(tick - d / (1000 / TICK));
+  }
+  document.querySelectorAll("[data-pov]").forEach(b => b.onclick = () => { pov = b.dataset.pov; document.querySelectorAll("[data-pov]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); draw(); });
+  function setPov(v) { pov = v; document.querySelectorAll("[data-pov]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.pov === v))); }
+
+  // ---------- fights (duels) ----------
+  const resClass = (r) => r.startsWith("won") ? "win" : r.startsWith("lost") ? "loss" : "draw";
+  function renderFights() {
+    const ds = seg.duels || [];
+    const ms = (v) => v == null ? "—" : `${v} ms`;
+    $("fights").innerHTML = ds.map(d => {
+      const edge = d.edge == null ? "—" : d.edge === 0 ? "even" : `<span class="${d.edge > 0 ? "win" : "loss"}">${d.edge > 0 ? "+" : "−"}${Math.abs(d.edge)} ms</span>`;
+      const shot = d.kind === "reaction" ? `reaction ${d.reaction} ms` : d.kind;
+      return `<tr tabindex="0" data-tick="${d.tick}" data-appear="${d.appear}">
+        <td>${secs(d.tick)}s</td><td>${esc(d.enemy.replace(/^- /, ""))}</td><td>${esc(d.peek)}</td>
+        <td>${ms(d.myDelay)}</td><td>${ms(d.hisDelay)}</td><td>${edge}</td><td>${esc(shot)}</td>
+        <td>${d.flick == null ? (d.offset <= 3 ? "on him" : "—") : d.flick + " ms"}</td>
+        <td class="${resClass(d.result)}">${esc(d.result)}</td>
+        <td><button class="pov-btn" data-pov-at="${d.appear}">Your screen</button></td></tr>`;
+    }).join("") || `<tr><td colspan="10" class="none">No fights detected this round${demo.wallCheck ? "" : " (needs the map's wall data)"}.</td></tr>`;
+    $("fights").querySelectorAll("tr[data-tick]").forEach(tr => { const go = (e) => { pause(); seek(+tr.dataset.tick - (e && e.shiftKey ? 0 : 32)); }; tr.onclick = go; tr.onkeydown = e => { if (e.key === "Enter") go(e); }; });
+    $("fights").querySelectorAll("[data-pov-at]").forEach(b => b.onclick = (e) => { e.stopPropagation(); pause(); setPov("screen"); seek(+b.dataset.povAt); });
+    const f = demo.fights;
+    $("fightSum").textContent = f ? `whole match: ${f.won}/${f.duels} won · peeking ${f.peek.won}/${f.peek.n} · holding ${f.hold.won}/${f.hold.n}${f.reactionMedian ? ` · typical reaction ${f.reactionMedian} ms` : ""}${f.myDelayMedian ? ` · your screen ${f.myDelayMedian} ms behind` : ""}` : "";
+  }
+  function renderFightsTrend() {
+    const ms = INDEX.filter(m => isMatch(m) && m.fights).slice().reverse();
+    if (!ms.length) { $("fightsTrend").innerHTML = `<p class="note">Shows up once a match with fight data is processed.</p>`; return; }
+    const pct = (x) => x && x.n ? `${x.won}/${x.n} <small>${Math.round(x.won / x.n * 100)}%</small>` : "—";
+    const tot = (k) => { let w = 0, n = 0; for (const m of ms) { w += m.fights[k].won; n += m.fights[k].n; } return { won: w, n }; };
+    const lobby = (m) => { const v = Object.entries(m.lobbyDelay || {}).filter(([n]) => n !== m.me).map(([, v]) => v).sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : null; };
+    $("fightsTrend").innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Match</th><th>Your screen delay</th><th>Lobby typical</th><th>Fights won</th><th>When you peeked</th><th>When they peeked</th><th>Typical reaction</th><th>Prefires</th></tr></thead>
+      <tbody>${ms.map(m => { const f = m.fights, d = dateOf(m); return `<tr data-open="${safeId(m.id)}" tabindex="0">
+        <td>${DAYS[d.getDay()]} ${esc(short(d))} · ${esc(m.map.replace(/^(de|cs|ar)_/, ""))}</td><td>${f.myDelayMedian ?? "—"} ms</td><td>${lobby(m) ?? "—"} ms</td>
+        <td>${pct({ won: f.won, n: f.duels })}</td><td>${pct(f.peek)}</td><td>${pct(f.hold)}</td>
+        <td>${f.reactionMedian ? f.reactionMedian + " ms" : "—"}</td><td>${f.prefires}</td></tr>`; }).join("")}
+      ${ms.length > 1 ? `<tr class="tot"><td>All matches</td><td></td><td></td><td></td><td>${pct(tot("peek"))}</td><td>${pct(tot("hold"))}</td><td></td><td></td></tr>` : ""}
+      </tbody></table></div>
+      <p class="note">Fights are estimated from the demo (see a replay's “Fights this round” for how). Watch the “when they peeked” column on high-ping nights: that's where delay costs you most.</p>`;
+    $("fightsTrend").querySelectorAll("tr[data-open]").forEach(tr => tr.onclick = () => { location.hash = "m-" + tr.dataset.open; });
   }
 
   function renderCoach() {

@@ -16,3 +16,12 @@
   A single-frame "clear" blip can happen at edges. Look for a sustained run before calling it "the line opened".
 - **Sounds.** Only sound-making events are stored. "Heard" is an estimate by distance (footsteps ~1100u, gunfire ~2500u), no walls.
 - **Can't know:** voice comms, what was on screen beyond the data, the player's reasons. Ask.
+- **Ping vs screen delay.** `m_iPing` is the scoreboard ping. Screen delay comes from each usercmd's input history (TrueView data,
+  every player, in every recent server demo): simulated tick − rendered tick = how far behind the server that screen was
+  (ping + interpolation). First Cache match: m0j 111 ms, lobby 37–98 ms. Values over 40 ticks (625 ms) are reconnects, dropped.
+- **Duels** (`tools/duels.py`): a clear line opens after ≥ 0.25 s without one and someone shoots / takes damage within 3 s.
+  Who peeked = the one moving (> 110 u/s) while the other wasn't (< 70 u/s); otherwise "both moving"/"both still".
+  Head start ≈ (peeker delay + holder delay) / 2. An estimate from both screens' delays, not a measurement of either screen.
+  Reaction = first shot − when he appeared on m0j's screen; < 150 ms = prefire, > 1 s = "late shot" (waited / repositioned).
+- **"Your screen" view** draws every other player at (now − m0j's screen delay): where his screen had them. It's a reconstruction
+  from server positions, so it can't show client-side prediction quirks.

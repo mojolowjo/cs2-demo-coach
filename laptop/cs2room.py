@@ -6,6 +6,7 @@ usage (from CS2Room\\.venv\\Scripts\\python.exe):
   cs2room.py check      only look for new matches and download their demos into demos\\inbox
   cs2room.py process    only parse demos in demos\\inbox, add them to match history, archive them
   cs2room.py build      only rebuild site\\
+  cs2room.py reprocess  run every archived demo through the current tools again (after updates)
   cs2room.py serve      web server for site\\ on port 8080, with the "Check for new matches" button (POST /api/check)
   cs2room.py listen     match-over listener for CS2 Game State Integration (port 3000); runs the pipeline after a match ends
 
@@ -175,6 +176,31 @@ def process_inbox():
     log(f"processed {len(demos)} demo(s)")
     return len(demos)
 
+def reprocess():
+    """Run every archived demo through the current tools again (new stats/fights after an update). Keeps labels and dates."""
+    import tempfile
+    metas = {}
+    d = os.path.join(DATA, "demos")
+    for f in (os.listdir(d) if os.path.isdir(d) else []):
+        if f.endswith(".meta.json"):
+            m = json.load(open(os.path.join(d, f), encoding="utf-8")); metas[m["file"]] = m
+    zips = [os.path.join(r, f) for r, _, fs in os.walk(ARCHIVE) for f in fs if f.endswith(".dem.zip")]
+    done = 0
+    for z in sorted(zips):
+        name = os.path.basename(z)[:-4]
+        m = metas.get(name)
+        if not m: log(f"reprocess: no saved date/label for {name}, skipped"); continue
+        with tempfile.TemporaryDirectory() as tmp:
+            with zipfile.ZipFile(z) as zf: zf.extractall(tmp)
+            cmd = [PY, "-I", os.path.join(APP, "tools", "export_replay.py"), DATA, "--demo", m["label"], os.path.join(tmp, name),
+                   f"{m['date']} {m['time']}", "--overrides", os.path.join(CONFIG, "categories.json")]
+            log(f"reprocessing {name}")
+            p = subprocess.run(cmd, capture_output=True, text=True, timeout=1800, **NO_WINDOW)
+            if p.returncode != 0: log(f"FAILED {name}: {(p.stderr or p.stdout)[-400:]}"); continue
+            done += 1
+    log(f"reprocessed {done} demo(s)")
+    return done
+
 def build_site():
     p = subprocess.run([PY, "-I", os.path.join(APP, "tools", "build_site.py"), APP, SITE, "--demos", DATA,
                         "--steam", os.path.join(DATA, "steam", "latest.json")], capture_output=True, text=True, **NO_WINDOW)
@@ -294,6 +320,8 @@ if __name__ == "__main__":
         elif cmd == "build": build_site()
         elif cmd == "listen": listen()
         elif cmd == "serve": serve()
+        elif cmd == "reprocess":
+            with RunLock(): reprocess(); build_site()
         else: print(__doc__)
     except Exception as e:
         log(f"{cmd} failed: {e}"); sys.exit(1)

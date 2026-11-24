@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cs2coach import load, pick_player, player_bit, angle_off, get_checker, los_series, BODY_HALF_WIDTH_UNITS, TICK
 from classify import classify, load_overrides
 from store import write_demo, migrate
+from duels import screen_delays, pings, find_duels, fight_summary
 
 OUT_DIR = "."
 
@@ -42,6 +43,8 @@ def export(label, path, overrides=None, category=None):
     except Exception as e:
         print(f"(no radar image for {map_name}: {e})")
 
+    lag = screen_delays(path)          # {name: Series(tick -> ms)}, TrueView input history
+    png = pings(d)                     # {name: Series(tick -> ms)}, scoreboard ping
     alive_t = t[(t.health > 0)]
     places = (alive_t[alive_t.place.astype(str).str.len() > 0].groupby("place")[["X", "Y"]].median().reset_index())
 
@@ -73,6 +76,10 @@ def export(label, path, overrides=None, category=None):
                                seen=[int((int(m) & bit) > 0) if not math.isnan(m) else 0 for m in g["mask"].astype(float)],
                                spotted=[int(bool(v)) if v == v and v is not None else 0 for v in g.spotted],
                                place=[str(v) if isinstance(v, str) else "" for v in g.place])
+            for key, src in (("ping", png.get(nm)), ("lag", lag.get(nm))):
+                if src is not None and len(src):
+                    v = src.reindex(ticks, method="ffill")
+                    players[nm][key] = [None if (x is None or x != x) else int(round(x)) for x in v]
         myteam = players.get(me, {}).get("team", 0)
         # exact wall check: clear eye-to-eye line between me and each enemy, per frame
         if vc is not None and me in players:
@@ -134,7 +141,11 @@ def export(label, path, overrides=None, category=None):
                 bomb += [dict(tick=int(x), kind=n.replace("bomb_", "")) for x in b.tick]
         A = sh[(sh.tick >= s["start"]) & (sh.tick <= s["end"]) & ~sh.weapon.str.contains("knife|grenade|flash|smoke|molotov|decoy|c4", na=False)]
         gunfire = [dict(tick=int(x.tick), name=x.name, x=int(x.x), y=int(x.y)) for x in A.itertuples() if x.x == x.x]
-        out_segs.append(dict(label=s["label"], start=s["start"], fe=s["fe"], end=s["end"], winner=s["winner"], reason=s["reason"],
+        try:
+            duels = find_duels(t, me, {"fe": s["fe"], "end": s["end"], "myTeam": myteam}, vc, lag, sh, dm, kl) if myteam else []
+        except Exception as e:
+            print(f"(duels failed in {s['label']}: {e})"); duels = []
+        out_segs.append(dict(label=s["label"], start=s["start"], fe=s["fe"], end=s["end"], winner=s["winner"], reason=s["reason"], duels=duels,
                              myTeam=myteam, ticks=ticks, players=players, kills=kills, shots=shots, footsteps=steps, damage=dmg, bomb=bomb,
                              gunfire=gunfire))
     # awpy's per-player stats (KAST, ADR, openings, trades, multikills, clutches, utility). Empty for demos without rounds.
@@ -158,7 +169,11 @@ def export(label, path, overrides=None, category=None):
     ov = dict(overrides or {})
     if category: ov[os.path.basename(path)] = category
     kind, cat = classify(header, os.path.basename(path), humans, bots, len(rounds), addons=addons, overrides=ov)
+    my_lag = lag.get(me)
+    fights = fight_summary(out_segs, [float(x) for x in my_lag.dropna().values] if my_lag is not None else None)
+    lobby = {n: round(float(v.dropna().median())) for n, v in lag.items() if len(v.dropna())}
     return dict(label=label, file=os.path.basename(path), map=map_name, me=me, radar=radar, wallCheck=vc is not None,
+                fights=fights, lobbyDelay=lobby,
                 type=kind, category=cat, humans=humans, bots=bots, server=header.get("server_name", ""),
                 score=[won, lost] if len(rounds) else None,
                 duration=round(float(header.get("playback_time", 0) or 0)), stats=stats,
