@@ -1,5 +1,6 @@
-# Builds m0j's CS2 ROOM from replay/ + data/steam/ and publishes it with GitHub Pages:
-#   https://mojolowjo.github.io/cs2-demo-coach/
+# Publishes the CS2 ROOM launcher with GitHub Pages: https://mojolowjo.github.io/cs2-demo-coach/
+# The real site runs on m0j's laptop behind a Cloudflare tunnel; the laptop commits its current address to data/tunnel.json
+# and the launcher (launcher/index.html) sends visitors there. The full static copy of the site is no longer published here.
 # Runs on every push to main, after each "Steam stats" run (its commits don't trigger push events), and on demand.
 name: Site
 
@@ -28,8 +29,12 @@ jobs:
         with:
           ref: main   # workflow_run would otherwise check out the commit from before the stats update
 
-      - name: Assemble the site
-        run: python3 tools/build_site.py . _site
+      - name: Assemble the launcher
+        run: |
+          mkdir -p _site
+          cp launcher/index.html _site/index.html
+          if [ -f data/tunnel.json ]; then cp data/tunnel.json _site/tunnel.json; fi
+          touch _site/.nojekyll
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

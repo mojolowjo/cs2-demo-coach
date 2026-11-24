@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>CS2 ROOM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Launcher for m0j's CS2 ROOM. The real site runs on his laptop behind a Cloudflare tunnel whose address changes on restart;
+   the laptop writes the current address to data/tunnel.json in the repo and this page sends you there. */
+:root {
+  --bg: #0b1017; --panel: #121a24; --line: #233042; --fg: #e3e9f1; --muted: #8b98a8;
+  --ct: #5aa4e6; --t: #e4ad4c; --good: #59c08a; --bad: #e0645c;
+  --f-display: "Chakra Petch", system-ui, sans-serif; --f-body: "Inter", system-ui, sans-serif;
+}
+:root[data-theme="light"] { --bg: #f5f7fa; --panel: #fff; --line: #d8dee7; --fg: #121a24; --muted: #5d6b7c; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg: #f5f7fa; --panel: #fff; --line: #d8dee7; --fg: #121a24; --muted: #5d6b7c; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--f-body); }
+.wrap { max-width: 760px; margin: 0 auto; padding: clamp(40px, 12vh, 120px) 16px 40px; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(44px, 11vw, 96px); letter-spacing: 0.06em; line-height: 1; margin: 0; }
+h1 .ct { color: var(--ct); } h1 .t { color: var(--t); }
+p { color: var(--muted); margin: 14px 0 28px; max-width: 48ch; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: grid; gap: 12px; }
+.status { display: flex; align-items: center; gap: 10px; font-weight: 500; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.on { background: var(--good); box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 25%, transparent); }
+.dot.off { background: var(--bad); }
+.go { display: inline-block; text-align: center; font-family: var(--f-display); font-weight: 700; font-size: 20px; letter-spacing: 0.04em;
+  background: var(--ct); color: #06101a; text-decoration: none; border-radius: 10px; padding: 12px 18px; }
+.go[aria-disabled="true"] { background: var(--line); color: var(--muted); pointer-events: none; }
+small { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>CS2 <span class="ct">RO</span><span class="t">OM</span></h1>
+  <p>Post-match CS2 reviews, hosted on m0j's laptop. This page always points to its current address.</p>
+  <div class="card">
+    <div class="status"><span class="dot" id="dot"></span><span id="msg">Looking for the laptop…</span></div>
+    <a class="go" id="go" href="#" aria-disabled="true">Open CS2 ROOM →</a>
+    <small id="when"></small>
+  </div>
+</div>
+<script>
+(async () => {
+  const $ = (id) => document.getElementById(id);
+  // two copies of the address: this site's (rebuilt about a minute after the laptop pushes) and the repo's raw file (live)
+  const sources = ["tunnel.json", "https://raw.githubusercontent.com/mojolowjo/cs2-demo-coach/main/data/tunnel.json"];
+  const got = (await Promise.all(sources.map(u => fetch(u + "?t=" + Date.now(), { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null))))
+    .filter(x => x && x.url);
+  if (!got.length) { $("dot").className = "dot off"; $("msg").textContent = "The laptop hasn't shared an address yet."; return; }
+  const t = got.sort((a, b) => String(b.updated).localeCompare(String(a.updated)))[0];
+  const ago = (iso) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+    return m < 2 ? "just now" : m < 90 ? m + " min ago" : m < 2880 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " days ago"; };
+  $("when").textContent = "Address updated " + ago(t.updated) + ".";
+  $("go").href = t.url;
+  // is it up? (a no-cors request only tells us whether the address answers at all)
+  const up = await Promise.race([fetch(t.url, { mode: "no-cors", cache: "no-store" }).then(() => true, () => false),
+                                 new Promise(r => setTimeout(() => r(false), 8000))]);
+  if (up) {
+    $("dot").className = "dot on"; $("msg").textContent = "Laptop is online."; $("go").removeAttribute("aria-disabled");
+    if (!location.search.includes("stay")) setTimeout(() => location.replace(t.url), 900);
+  } else {
+    $("dot").className = "dot off"; $("msg").textContent = "Laptop isn't answering right now (asleep, restarting, or offline).";
+    $("go").removeAttribute("aria-disabled"); $("go").textContent = "Try anyway →";
+  }
+})();
+</script>
+</body>
+</html>

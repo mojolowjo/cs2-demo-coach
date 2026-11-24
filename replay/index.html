@@ -1,4 +1,4 @@
-<title>m0j's CS2 ROOM</title>
+<title>CS2 ROOM</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -128,6 +128,18 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
 .brand .who { font-family: var(--f-display); font-weight: 700; font-size: clamp(56px, 11vw, 112px); letter-spacing: -0.01em; color: var(--fg); }
 .brand .room { font-family: var(--f-display); font-weight: 600; font-size: clamp(18px, 3.4vw, 30px); letter-spacing: 0.42em; color: var(--muted); margin-top: 10px; padding-left: 4px; }
 .brand .room span.ct { color: var(--ct); } .brand .room span.t { color: var(--t); }
+/* CS2 ROOM hub: one button per player */
+.hub { padding-top: clamp(28px, 8vh, 80px); }
+.hub-title { font-family: var(--f-display); font-weight: 700; font-size: clamp(44px, 9vw, 96px); letter-spacing: 0.06em; line-height: 1; color: var(--fg); margin: 0; }
+.hub-title span.ct { color: var(--ct); } .hub-title span.t { color: var(--t); }
+.hub-intro { color: var(--muted); max-width: 52ch; margin: 14px 0 28px; }
+.players { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.player { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px 16px;
+  color: var(--fg); cursor: pointer; display: grid; gap: 6px; font: inherit; }
+.player:hover, .player:focus-visible { border-color: var(--ct); }
+.player .who { font-family: var(--f-display); font-weight: 700; font-size: clamp(40px, 7vw, 60px); line-height: 0.95; letter-spacing: -0.01em; }
+.player small { color: var(--muted); font-size: 13px; }
+.brand .room a { color: inherit; text-decoration: none; }
 .menu-intro { color: var(--muted); max-width: 60ch; margin: 0; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
@@ -292,10 +304,16 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
 </style>
 
 <div class="wrap">
-  <section class="menu" id="menuView">
+  <section class="hub" id="roomView">
+    <h1 class="hub-title">CS2 <span class="ct">RO</span><span class="t">OM</span></h1>
+    <p class="hub-intro">Post-match reviews from our demos. Pick a player.</p>
+    <div class="players" id="players"></div>
+  </section>
+
+  <section class="menu" id="menuView" hidden>
     <div class="brand" aria-label="m0j's CS2 Room">
       <div class="who">m0j</div>
-      <div class="room">CS2 <span class="ct">RO</span><span class="t">OM</span></div>
+      <div class="room"><a href="#" title="All players">CS2 <span class="ct">RO</span><span class="t">OM</span></a></div>
     </div>
     <p class="menu-intro">Post-match reviews from your demos: 2D replays, what you could see and hear, and every shot broken down.</p>
     <nav class="nav" aria-label="Pages">
@@ -320,7 +338,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
   <section id="historyView" class="history" hidden>
     <header class="top">
       <div class="head-left">
-        <button class="back" data-go="">← Home</button>
+        <button class="back" data-go="p-m0j">← Home</button>
         <div class="mini-brand">m0j<small>CS2 ROOM</small></div>
         <h1 style="font-size:20px"><span id="histTitle">Matches</span><small id="histSub"></small></h1>
       </div>
@@ -740,11 +758,22 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     else paint(null);
   }
 
-  // ---------- routing: (none) home · #history · #practice · #m-<id> · #m-<id>-round-N ----------
+  // ---------- players (the CS2 ROOM hub); friends get added here later ----------
+  const PLAYERS = [{ id: "m0j", name: "m0j", note: "Steam stats · matches · practice" }];
+  let PLAYER = "m0j";
+  function renderPlayers() {
+    $("players").innerHTML = PLAYERS.map(p => `<button class="player" data-player="${esc(p.id)}"><span class="who">${esc(p.name)}</span><small>${esc(p.note)}</small></button>`).join("");
+    $("players").querySelectorAll("[data-player]").forEach(b => b.onclick = () => { location.hash = "p-" + b.dataset.player; });
+  }
+
+  // ---------- routing: (none) CS2 ROOM hub · #p-<player> player home · #history · #practice · #m-<id> · #m-<id>-round-N ----------
   async function route() {
     if (!INDEX) return;
     const h = location.hash.replace(/^#/, "");
-    const show = (v) => { for (const id of ["menuView", "historyView", "replayView"]) $(id).hidden = id !== v; };
+    const show = (v) => { for (const id of ["roomView", "menuView", "historyView", "replayView"]) $(id).hidden = id !== v; };
+    if (h === "") { pause(); renderPlayers(); show("roomView"); document.title = "CS2 ROOM"; return; }
+    const pm = /^p-(.+)$/.exec(h);
+    if (pm) { pause(); PLAYER = pm[1]; show("menuView"); document.title = "m0j's CS2 ROOM"; window.scrollTo(0, 0); return; }
     if (h === "history" || h === "practice") {
       pause(); const kind = h === "history" ? "match" : "practice";
       if (H.kind !== kind) { H.kind = kind; H.cat = "All"; H.day = null; }
@@ -752,7 +781,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     }
     const mm = /^m-(.+?)(?:-round-(\d+))?$/.exec(h);
     const m = mm && byHash(mm[1]);
-    if (!m) { pause(); show("menuView"); return; }
+    if (!m) { pause(); show("roomView"); renderPlayers(); return; }
     show("replayView"); window.scrollTo(0, 0);
     const j = mm[2] ? +mm[2] - 1 : 0;
     if (!demo || demo.id !== m.id) {
@@ -764,7 +793,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     requestAnimationFrame(resize);
   }
   window.addEventListener("hashchange", route);
-  $("toMenu").onclick = () => { location.hash = ""; route(); };
+  $("toMenu").onclick = () => { location.hash = "p-" + PLAYER; route(); };
 
   function selectDemo(full) {
     demo = full; setPov("server");

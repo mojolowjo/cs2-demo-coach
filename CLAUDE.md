@@ -49,10 +49,12 @@ m0j's Windows laptop runs everything locally: see `laptop/README.md`. Its match 
 When this chat is linked to the laptop, read `CS2Room\logs\cs2room.log` first when something seems off.
 After changing the tools, archived demos can be rebuilt with `cs2room.py reprocess` (keeps labels/dates).
 
-## The public site (backup copy)
-**https://mojolowjo.github.io/cs2-demo-coach/** is built by `.github/workflows/pages.yml` from `replay/index.html`,
-`replay/demos.json`, `replay/radar_*.png` and `data/steam/latest.json` (as `steam.json`). It rebuilds on every push and after
-each nightly Steam stats run, so Steam numbers update with no Claude run. m0j chose to make it public.
+## The public page (launcher)
+**https://mojolowjo.github.io/cs2-demo-coach/** is now only a launcher (`launcher/index.html`, published by `.github/workflows/pages.yml`).
+The real site runs on the laptop; the laptop exposes it through a Cloudflare quick tunnel (random `*.trycloudflare.com` address that
+changes on restart) and commits the current address to `data/tunnel.json`; the launcher reads it (Pages copy + raw.githubusercontent)
+and redirects. Status (Nov 24 2026): pages built; tunnel, the laptop's GitHub push key and a site password login are the next steps.
+The laptop site opens on the CS2 ROOM hub (player buttons, `PLAYERS` in `replay/index.html`); `#p-m0j` is m0j's page. Friends later.
 The claude.ai artifact (link above) is the older copy; update it too only if m0j still wants it.
 
 ## Adding a new demo (match history must keep growing)
