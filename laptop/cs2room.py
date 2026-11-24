@@ -10,6 +10,7 @@ usage (from CS2Room\\.venv\\Scripts\\python.exe):
   cs2room.py serve      web server for site\\ on port 8080, with the "Check for new matches" button (POST /api/check)
                         and "Sign in through Steam" (/auth/steam): through the tunnel only signed-in, allowed players can check
   cs2room.py listen     match-over listener for CS2 Game State Integration (port 3000); runs the pipeline after a match ends
+  cs2room.py tunnel     Cloudflare quick tunnel to the site; posts its address to the repo (data/tunnel.json) for the launcher
 
 Folder layout: see laptop/README.md. Private settings come from config\\secrets.dpapi (Windows-encrypted)
 or config\\secrets.local.json (plain, before setup.ps1 encrypts it). Nothing here prints or uploads them.
@@ -405,6 +406,67 @@ def serve():
     log(f"site on port {SITE_PORT}")
     ThreadingHTTPServer(("0.0.0.0", SITE_PORT), partial(H, directory=SITE)).serve_forever()
 
+# ---------- Cloudflare quick tunnel + address for the GitHub launcher ----------
+CLOUDFLARED = os.path.join(ROOT, "tools", "cloudflared.exe")
+REPO = "mojolowjo/cs2-demo-coach"
+
+def github_token():
+    """Fine-grained token (contents: write on this repo only), saved by laptop\\setup-tunnel.ps1 as config\\github.dpapi."""
+    enc = os.path.join(CONFIG, "github.dpapi")
+    if os.path.exists(enc) and os.name == "nt":
+        return _dpapi_decrypt(bytes.fromhex(open(enc).read().strip())).decode("utf-16-le").strip()
+    return os.environ.get("CS2ROOM_GITHUB_TOKEN", "").strip() or None
+
+def publish_address(url):
+    """Write data/tunnel.json in the repo through the GitHub API (no Git needed)."""
+    import base64
+    tok = github_token()
+    if not tok: log("tunnel: no GitHub key yet (run laptop\\setup-tunnel.ps1); launcher not updated"); return False
+    api = f"https://api.github.com/repos/{REPO}/contents/data/tunnel.json"
+    hdr = {"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json", "User-Agent": "cs2room-laptop"}
+    sha = None
+    try:
+        with urllib.request.urlopen(urllib.request.Request(api, headers=hdr), timeout=20) as r: sha = json.load(r).get("sha")
+    except urllib.error.HTTPError as e:
+        if e.code != 404: raise
+    body = {"message": "laptop: tunnel address", "content": base64.b64encode(json.dumps(
+        {"url": url, "updated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}, indent=1).encode()).decode()}
+    if sha: body["sha"] = sha
+    req = urllib.request.Request(api, data=json.dumps(body).encode(), method="PUT", headers={**hdr, "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=20): pass
+    log(f"tunnel: launcher now points to {url}")
+    return True
+
+def tunnel():
+    """Keep a quick tunnel to the site running; publish each new address; restart it when it stops answering."""
+    import re, queue
+    if not os.path.exists(CLOUDFLARED): log(f"tunnel: {CLOUDFLARED} missing"); return
+    while True:
+        proc = subprocess.Popen([CLOUDFLARED, "tunnel", "--no-autoupdate", "--url", f"http://localhost:{SITE_PORT}"],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", **NO_WINDOW)
+        lines = queue.Queue()
+        threading.Thread(target=lambda: [lines.put(l) for l in proc.stdout], daemon=True).start()
+        url, t0 = None, time.time()
+        while url is None and time.time() - t0 < 90 and proc.poll() is None:
+            try: m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", lines.get(timeout=5))
+            except queue.Empty: continue
+            if m: url = m.group(0)
+        if not url:
+            log("tunnel: no address from cloudflared; retrying in 1 min"); proc.kill(); time.sleep(60); continue
+        log(f"tunnel: up at {url}")
+        time.sleep(10)                                     # let Cloudflare's DNS for the new name settle
+        try: publish_address(url)
+        except Exception as e: log(f"tunnel: couldn't update the launcher: {e}")
+        fails = 0
+        while proc.poll() is None:                         # health check every 2 minutes, through Cloudflare
+            time.sleep(120)
+            try:
+                with urllib.request.urlopen(urllib.request.Request(url + "/api/status", headers={"User-Agent": "cs2room-health"}), timeout=20): fails = 0
+            except Exception:
+                fails += 1
+                if fails >= 3: log("tunnel: stopped answering; restarting it"); proc.kill(); break
+        time.sleep(5)
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
     try:
@@ -415,6 +477,7 @@ if __name__ == "__main__":
         elif cmd == "build": build_site()
         elif cmd == "listen": listen()
         elif cmd == "serve": serve()
+        elif cmd == "tunnel": tunnel()
         elif cmd == "reprocess":
             with RunLock(): reprocess(); build_site()
         else: print(__doc__)

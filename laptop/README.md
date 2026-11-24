@@ -51,3 +51,11 @@ read `secrets.dpapi`, or open `localhost:8080`. To show the page on m0j's phone,
 ## Later
 - FACEIT (private Downloads API; browser automation or one-click download)
 - pushing the laptop's matches to GitHub so the public Pages site stays in sync
+
+## Reaching it from anywhere (Cloudflare quick tunnel)
+`setup-tunnel.ps1` (run once): saves a GitHub key (fine-grained, Contents read/write, this repo only) Windows-encrypted in
+`config\github.dpapi`, puts `tools\cloudflared.exe` in place and registers the **CS2Room tunnel** task (`cs2room.py tunnel`).
+The task keeps a `*.trycloudflare.com` tunnel to port 8080 running, writes each new address to `data/tunnel.json` in the repo,
+and restarts the tunnel if it stops answering. https://mojolowjo.github.io/cs2-demo-coach/ reads that file and sends you there.
+Through the tunnel the "Check for new matches" button needs "Sign in through Steam" with an account listed in
+`config\site_auth.json` → `allowed` (SteamID64s; created with m0j's). At home it works for anyone on the network.
