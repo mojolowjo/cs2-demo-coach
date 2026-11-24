@@ -31,6 +31,7 @@ p { color: var(--muted); margin: 14px 0 28px; max-width: 48ch; }
   background: var(--ct); color: #06101a; text-decoration: none; border-radius: 10px; padding: 12px 18px; }
 .go[aria-disabled="true"] { background: var(--line); color: var(--muted); pointer-events: none; }
 small { color: var(--muted); }
+.tip { font-size: 13px; margin-top: 18px; } .tip a { color: var(--ct); }
 </style>
 </head>
 <body>
@@ -42,10 +43,12 @@ small { color: var(--muted); }
     <a class="go" id="go" href="#" aria-disabled="true">Open CS2 ROOM →</a>
     <small id="when"></small>
   </div>
+  <p class="tip">Want to skip this page? Bookmark <a id="goLink" href="?go">this link</a> instead: it opens CS2 ROOM straight away whenever the laptop is online.</p>
 </div>
 <script>
 (async () => {
   const $ = (id) => document.getElementById(id);
+  $("goLink").href = location.origin + location.pathname + "?go"; $("goLink").textContent = $("goLink").href.replace(/^https?:\/\//, "");
   // two copies of the address: this site's (rebuilt about a minute after the laptop pushes) and the repo's raw file (live)
   const sources = ["tunnel.json", "https://raw.githubusercontent.com/mojolowjo/cs2-demo-coach/main/data/tunnel.json"];
   const got = (await Promise.all(sources.map(u => fetch(u + "?t=" + Date.now(), { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null))))
@@ -61,7 +64,7 @@ small { color: var(--muted); }
                                  new Promise(r => setTimeout(() => r(false), 8000))]);
   if (up) {
     $("dot").className = "dot on"; $("msg").textContent = "Laptop is online."; $("go").removeAttribute("aria-disabled");
-    if (!location.search.includes("stay")) setTimeout(() => location.replace(t.url), 900);
+    if (new URLSearchParams(location.search).has("go")) location.replace(t.url);   // the "skip this page" bookmark
   } else {
     $("dot").className = "dot off"; $("msg").textContent = "Laptop isn't answering right now (asleep, restarting, or offline).";
     $("go").removeAttribute("aria-disabled"); $("go").textContent = "Try anyway →";
