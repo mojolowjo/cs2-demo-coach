@@ -64,7 +64,7 @@ def aim_headline(a):
     c, f, t, s = a["clicks"], a["flicks"], a["tracking"], a["session"]
     cl = c["classes"]
     return {"hitPct": s["hitPct"], "killsPerMin": s["killsPerMin"], "shotsPerKill": s["shotsPerKill"], "early": c["earlyShare"],
-            "earlyHit": cl["early"]["hit"], "timedHit": cl["timed"]["hit"], "trackedHit": cl["tracked"]["hit"],
+            "earlyHit": cl["early"]["hit"], "slipped": c.get("slippedShare"), "timedHit": cl["timed"]["hit"], "trackedHit": cl["tracked"]["hit"],
             "flickCorr": f["corr"], "flickOver": f["over"], "flickUnder": f["under"],
             "trackErr": t["err"], "trackLead": t["lead"], "surges": t["surges"]}
 

@@ -206,7 +206,7 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
 .aim-big span { color: var(--muted); }
 #aimTrend { margin-top: 10px; }
 #aimTrend tbody tr { cursor: pointer; }
-.cls-early { color: var(--kill); } .cls-timed { color: var(--good); } .cls-tracked { color: var(--fg); } .cls-grey { color: var(--muted); }
+.cls-early { color: var(--kill); } .cls-slipped { color: var(--accent, #e0a84f); } .cls-timed { color: var(--good); } .cls-tracked { color: var(--fg); } .cls-grey { color: var(--muted); }
 td.win, .win { color: var(--good); } td.loss, .loss { color: var(--kill); } td.draw { color: var(--muted); }
 /* home: collapsible extras + compact recent list */
 details.more { margin-top: 10px; }
@@ -1096,7 +1096,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
   }
 
   // ---------- aim practice (tools/aim.py) ----------
-  const CLS = { early: "early", timed: "timed", grey: "in between", tracked: "tracked" };
+  const CLS = { early: "never arrived", slipped: "slipped off", timed: "timed", grey: "in between", tracked: "tracked" };
   function renderAim() {
     const a = demo.aim;
     $("aimPanel").hidden = !a;
@@ -1109,12 +1109,13 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     $("aimBody").innerHTML = `<div class="aim-grid">
       <div><h3>When you click</h3>
         <div class="table-wrap"><table><thead><tr><th>Click</th><th>Taps</th><th>Hit</th><th>Off head</th></tr></thead><tbody>
-          ${row("early", "Before arriving")}
+          ${row("early", "Never arrived")}
+          ${c.classes.slipped ? row("slipped", "Slipped off") : ""}
           ${row("timed", `Timed (&lt;${lo} ms)`)}
           ${row("grey", `${lo}–${hi} ms`)}
           ${row("tracked", `Tracked (&gt;${hi} ms)`)}
         </tbody></table></div>
-        <p class="note">Single taps at ${c.targets === "still" ? "standing" : "running"} bots, by how long your crosshair had been on his head when you clicked. Your reaction is ${lo}–${hi} ms, so a <span class="cls-timed">timed</span> click was decided before the crosshair landed; a <span class="cls-tracked">tracked</span> one is a reaction after holding on him. ${c.earlyShare ?? "—"}% went off <span class="cls-early">before</span> your crosshair reached the head.</p></div>
+        <p class="note">Single taps at ${c.targets === "still" ? "standing" : "running"} bots, by how long your crosshair had been on his head when you clicked. Your reaction is ${lo}–${hi} ms, so a <span class="cls-timed">timed</span> click was decided before the crosshair landed; a <span class="cls-tracked">tracked</span> one is a reaction after holding on him. ${c.earlyShare ?? "—"}% went off with your crosshair off his head: <span class="cls-early">never arrived</span> = it hadn't reached the head yet; <span class="cls-slipped">slipped off</span> = it had been on the head in the last 0.3 s but drifted off before the click.</p></div>
       <div><h3>Flicks</h3>
         <div class="aim-big"><span><b>${f.n}</b>flicks</span><span><b>${f.medianDur ?? "—"} ms</b>typical length</span><span><b>${f.tPeak ?? "—"}</b>where the peak speed is (0.5 = smooth)</span><span><b>${pc(f.corr)}</b>needed a correction</span></div>
         <div class="table-wrap"><table><thead><tr><th>Size</th><th>n</th><th>Peak speed</th><th>Length</th><th>Corrected</th><th>Over / under</th></tr></thead><tbody>${amp}</tbody></table></div>
@@ -1130,12 +1131,12 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
     if (!ms.length) { $("aimTrend").innerHTML = `<p class="note">Shows up once an aim-practice demo is processed.</p>`; return; }
     const pc = (v) => v == null ? "—" : v + "%";
     $("aimTrend").innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>Session</th><th>Hit</th><th>Kills/min</th><th>Clicked early</th><th>Early hit</th><th>Timed hit</th><th>Tracked hit</th><th>Flick corrections</th><th>Track error</th><th>Catching up</th></tr></thead>
+      <thead><tr><th>Session</th><th>Hit</th><th>Kills/min</th><th>Off head at click</th><th>…slipped off</th><th>Off-head hit</th><th>Timed hit</th><th>Tracked hit</th><th>Flick corrections</th><th>Track error</th><th>Catching up</th></tr></thead>
       <tbody>${ms.map(m => { const a = m.aim, d = dateOf(m); return `<tr data-open="${safeId(m.id)}" tabindex="0">
         <td>${DAYS[d.getDay()]} ${esc(short(d))} ${esc(fmt12(m.time))} · ${esc(m.label)}</td><td>${pc(a.hitPct)}</td><td>${a.killsPerMin}</td>
-        <td>${pc(a.early)}</td><td>${pc(a.earlyHit)}</td><td>${pc(a.timedHit)}</td><td>${pc(a.trackedHit)}</td>
+        <td>${pc(a.early)}</td><td>${pc(a.slipped)}</td><td>${pc(a.earlyHit)}</td><td>${pc(a.timedHit)}</td><td>${pc(a.trackedHit)}</td>
         <td>${pc(a.flickCorr)}</td><td>${a.trackErr ?? "—"}°</td><td>${pc(a.surges)}</td></tr>`; }).join("")}</tbody></table></div>
-      <p class="note">Goal for the track-then-click drill: “clicked early” going down, “tracked hit” going up, “catching up” going down.</p>`;
+      <p class="note">Goal for the track-then-click drill: “off head at click” going down, “tracked hit” going up, “catching up” going down.</p>`;
     $("aimTrend").querySelectorAll("tr[data-open]").forEach(tr => tr.onclick = () => { location.hash = "m-" + tr.dataset.open; });
   }
 

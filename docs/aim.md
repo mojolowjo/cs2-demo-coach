@@ -30,7 +30,8 @@ python3 -I tools/aim.py DEMO.dem [--reaction 150 220] [--json out.json]
 
 ## What each number means
 - **Click classes** (single taps at bots running > 100 u/s, sprays ≤ 0.12 s apart excluded): settle = how long the crosshair had
-  been within 1.5° of the head before the shot. `early` < 16 ms, `timed` < 150 ms, `grey` 150–220, `tracked` > 220 ms.
+  been within 1.5° of the head before the shot. `early` < 16 ms and never on the head in the 300 ms before; `slipped` < 16 ms but
+  it had been on the head in those 300 ms (he waited, then drifted off during his reaction delay), `timed` < 150 ms, `grey` 150–220, `tracked` > 220 ms.
 - **Flicks**: view movements (speed > 30°/s, dips under 40 ms merged) of 8° or more that end within 6° of a bot's head.
   `tPeak` = where in the movement the top speed is (0.5 = a smooth bell; real hands ~0.45). `corrections` = extra speed peaks.
   `primaryErr` = where the first motion stopped vs the head, along the flick direction (+ past it, − short). Over/under use ±1°.
@@ -53,3 +54,9 @@ python3 -I tools/aim.py DEMO.dem [--reaction 150 220] [--json out.json]
 | flick corrections / over / under | 23 / 35 / 33 % | 39 / 33 / 40 % | 36 / 40 / 37 % |
 | tracking error / lead / surges | 1.25° / −0.36° / 20% | 1.2° / −0.4° / 15% | 1.2° / −0.27° / 18% |
 Arm overshot big flicks (60°+: 52% over vs 26% under); wrist did not.
+
+## Nov 23 2026 evening: close bots
+Close bots (< 300 u) cross the screen at ~45°/s vs ~7°/s far away. Two thirds of his close "early" clicks were really `slipped`:
+he had landed on the head, then drifted off in the ~200 ms between deciding to click and the click. Bot direction changes were not
+the cause (7% either way). He says he matches speed with the arm and corrects with the wrist; the fix is holding the match through
+the click, not waiting longer. Quarter splits must drop pauses (> 10 s without shots) or the first quarter looks slow.
