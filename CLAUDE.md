@@ -65,4 +65,4 @@ Rebuild what he knew (radar spots, likely-heard sounds, killfeed and alive count
 - `docs/measurement-notes.md`: noise levels and pitfalls
 - `docs/getting-demos.md`: how m0j gets demos, plus `cfg/coach.cfg` for quick bot tests
 
-Never commit demos (`*.dem`, they contain Steam IDs) or generated replay data.
+Never commit raw demos (`*.dem`, they are large and contain Steam IDs). `replay/demos.json` is committed on purpose: it powers the site.
