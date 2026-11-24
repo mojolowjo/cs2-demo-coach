@@ -1,0 +1,9 @@
+# Demos contain Steam IDs and are large - never commit them
+*.dem
+*.dem.bz2
+# Generated replay data
+replay/demos.json
+replay/radar_*.png
+out/
+__pycache__/
+*.pyc

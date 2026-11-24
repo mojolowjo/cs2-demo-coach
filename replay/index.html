@@ -1,0 +1,699 @@
+<title>m0j's CS2 Room</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: tactical review desk. Radar replay on the left, live "what you knew" readout on the right,
+   timeline under the radar, shot log and coach notes below. Deliberately dark (radar screen). */
+:root {
+  color-scheme: dark;
+  --bg: #0d1218;
+  --panel: #141b23;
+  --panel-2: #1a232d;
+  --line: #26323f;
+  --fg: #dbe3ea;
+  --muted: #8494a5;
+  --dim: #56636f;
+  --ct: #5ea2e6;
+  --t: #e3ac4e;
+  --you: #f4f7fa;
+  --kill: #ec5a52;
+  --good: #59c08a;
+  --warn: #e3ac4e;
+  --f-display: "Chakra Petch", "Inter", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+#replayView { display: grid; gap: 16px; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; line-height: 1.45; }
+.wrap { max-width: 1280px; margin: 0 auto; padding-block: 20px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 16px; }
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: 26px; letter-spacing: .02em; margin: 0; line-height: 1.1; text-wrap: balance; }
+h1 small { display: block; font-family: var(--f-mono); font-weight: 400; font-size: 12px; color: var(--muted); letter-spacing: 0; margin-top: 4px; }
+h2 { font-family: var(--f-display); font-weight: 600; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.controls-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+select, button { font: inherit; color: var(--fg); background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; cursor: pointer; }
+button:hover, select:hover { border-color: var(--muted); }
+button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--ct); outline-offset: 2px; }
+.seg-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg-tabs button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.statline { display: flex; flex-wrap: wrap; gap: 6px 20px; font-family: var(--f-mono); font-size: 12.5px; color: var(--muted); }
+.statline b { color: var(--fg); font-weight: 600; font-size: 15px; margin-right: 4px; }
+
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
+.radar-panel { padding: 10px; display: grid; gap: 10px; }
+.radar-box { position: relative; width: 100%; max-width: 100%; aspect-ratio: 1 / 1; background: #0a0f14; border-radius: 6px; overflow: hidden; }
+canvas#radar { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.clock { position: absolute; top: 10px; left: 12px; font-family: var(--f-mono); font-size: 13px; color: var(--fg); background: rgba(10,15,20,.75); padding: 4px 8px; border-radius: 4px; }
+.legend { position: absolute; bottom: 8px; left: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--muted); pointer-events: none; }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+
+.view-modes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.view-modes span { color: var(--muted); font-size: 12px; margin-right: 4px; }
+.view-modes button { padding: 5px 9px; font-size: 12.5px; }
+.view-modes button[aria-pressed="true"] { border-color: var(--ct); color: var(--ct); }
+
+.timeline { display: grid; gap: 8px; }
+.tl-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tl-row .spacer { flex: 1; }
+#play { width: 78px; font-weight: 600; }
+.speed button { padding: 5px 8px; font-family: var(--f-mono); font-size: 12px; }
+.speed button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.track { position: relative; height: 34px; }
+.track input[type=range] { position: absolute; inset: 14px 0 auto 0; width: 100%; margin: 0; accent-color: var(--fg); z-index: 2; background: transparent; }
+.marks { position: absolute; inset: 0; pointer-events: none; }
+.marks i { position: absolute; top: 0; width: 2px; height: 12px; transform: translateX(-1px); border-radius: 1px; }
+.marks i.k-you { background: var(--good); height: 14px; }
+.marks i.k-died { background: var(--kill); height: 14px; }
+.marks i.k-other { background: var(--dim); }
+.marks i.shot { background: var(--you); height: 6px; top: 6px; opacity: .55; width: 1px; }
+.marks i.bomb { background: var(--warn); height: 14px; width: 3px; }
+.marks i.fe { background: var(--muted); height: 34px; width: 1px; opacity: .5; }
+.tl-legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
+.tl-legend i { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 1px; }
+
+.side { display: grid; gap: 16px; }
+.knew dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 10px 0 0; font-size: 13px; }
+.knew dt { color: var(--muted); }
+.knew dd { margin: 0; font-family: var(--f-mono); font-size: 12.5px; min-width: 0; overflow-wrap: anywhere; }
+.alive { display: flex; gap: 10px; align-items: center; }
+.alive .ct { color: var(--ct); } .alive .t { color: var(--t); }
+.chip { display: inline-block; font-family: var(--f-mono); font-size: 11.5px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); margin: 0 4px 4px 0; }
+.chip.ct { color: var(--ct); border-color: color-mix(in srgb, var(--ct) 40%, transparent); }
+.chip.t { color: var(--t); border-color: color-mix(in srgb, var(--t) 40%, transparent); }
+.none { color: var(--dim); }
+.hpbar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+.hpbar > div { height: 100%; background: var(--good); }
+
+.feed { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; max-height: 280px; overflow-y: auto; }
+.feed li { display: grid; grid-template-columns: 44px minmax(0,1fr); gap: 8px; align-items: baseline; padding: 5px 6px; border-radius: 5px; cursor: pointer; font-size: 12.5px; }
+.feed li:hover, .feed li:focus-visible { background: var(--panel-2); }
+.feed li.past { opacity: 1; } .feed li.future { opacity: .45; }
+.feed .t { font-family: var(--f-mono); color: var(--muted); font-size: 11.5px; }
+.feed .ct { color: var(--ct); } .feed .tt { color: var(--t); }
+.feed .w { color: var(--muted); font-family: var(--f-mono); font-size: 11px; }
+.feed .me { font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.feed .hs { color: var(--kill); font-family: var(--f-mono); font-size: 10.5px; }
+
+.lower { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .lower { grid-template-columns: minmax(0, 1fr); } }
+.table-wrap { overflow-x: auto; margin-top: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 6px 8px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); font-family: var(--f-mono); white-space: nowrap; }
+tbody tr { cursor: pointer; }
+tbody tr:hover, tbody tr:focus-visible { background: var(--panel-2); }
+tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
+.res-hit { color: var(--good); } .res-miss { color: var(--muted); }
+.hot { color: var(--warn); }
+.aim { display: inline-flex; align-items: center; gap: 6px; }
+.aimbar { position: relative; width: 64px; height: 10px; border-radius: 2px; background: var(--panel-2); border: 1px solid var(--line); }
+.aimbar .body { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--good) 28%, transparent); }
+.aimbar .x { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--you); transform: translateX(-1px); }
+.note { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
+.coach p { margin: 10px 0 0; font-size: 13.5px; max-width: 65ch; }
+.coach ul { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; display: grid; gap: 6px; }
+.coach .src { font-size: 11.5px; color: var(--dim); margin-top: 12px; }
+.loading { padding: 40px; text-align: center; color: var(--muted); }
+
+/* ---- main menu ---- */
+.menu { display: grid; gap: 28px; padding-block: 12px 8px; }
+.brand { display: grid; gap: 0; line-height: 0.92; }
+.brand .who { font-family: var(--f-display); font-weight: 700; font-size: clamp(56px, 11vw, 112px); letter-spacing: -0.01em; color: var(--fg); }
+.brand .room { font-family: var(--f-display); font-weight: 600; font-size: clamp(18px, 3.4vw, 30px); letter-spacing: 0.42em; color: var(--muted); margin-top: 10px; padding-left: 4px; }
+.brand .room span.ct { color: var(--ct); } .brand .room span.t { color: var(--t); }
+.menu-intro { color: var(--muted); max-width: 60ch; margin: 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.card:hover { border-color: var(--muted); }
+.card .top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.card h3 { font-family: var(--f-display); font-weight: 600; font-size: 19px; margin: 0; }
+.card .meta { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
+.card .mini { display: flex; flex-wrap: wrap; gap: 4px 16px; font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.card .mini b { color: var(--fg); font-size: 14px; margin-right: 3px; }
+.card .thumb { position: relative; aspect-ratio: 16 / 7; max-width: 100%; border-radius: 6px; overflow: hidden; background: #0a0f14; }
+.card .thumb canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.card .go { display: flex; flex-wrap: wrap; gap: 6px; }
+.card .go button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 600; }
+.add-note { border: 1px dashed var(--line); border-radius: 10px; padding: 16px; color: var(--muted); font-size: 13px; display: grid; gap: 6px; align-content: start; }
+.add-note b { color: var(--fg); font-family: var(--f-display); font-weight: 600; font-size: 15px; }
+.add-note code { font-family: var(--f-mono); font-size: 12px; color: var(--fg); }
+.back { display: inline-flex; align-items: center; gap: 6px; }
+.mini-brand { font-family: var(--f-display); font-weight: 700; font-size: 20px; line-height: 1; display: grid; gap: 2px; }
+.mini-brand small { font-weight: 600; font-size: 10.5px; letter-spacing: 0.32em; color: var(--muted); }
+.head-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <section class="menu" id="menuView">
+    <div class="brand" aria-label="m0j's CS2 Room">
+      <div class="who">m0j</div>
+      <div class="room">CS2 <span class="ct">RO</span><span class="t">OM</span></div>
+    </div>
+    <p class="menu-intro">Post-match reviews from your demos: 2D replays, what you could see and hear, and every shot broken down.</p>
+    <div class="cards" id="cards"><div class="loading">Loading demos…</div></div>
+  </section>
+
+  <div id="replayView" hidden>
+  <header class="top">
+    <div class="head-left">
+      <button class="back" id="toMenu">← Menu</button>
+      <div class="mini-brand">m0j<small>CS2 ROOM</small></div>
+      <h1 style="font-size:20px"><span id="demoTitle"></span><small id="sub">Loading demo data…</small></h1>
+    </div>
+    <div class="controls-top">
+      <div class="seg-tabs" id="segTabs" role="group" aria-label="Rounds"></div>
+    </div>
+  </header>
+  <div class="statline" id="statline"></div>
+
+  <section class="main">
+    <div class="panel radar-panel">
+      <div class="view-modes" role="group" aria-label="What to show">
+        <span>Show enemies:</span>
+        <button id="mode-all" data-mode="all" aria-pressed="true">All (truth)</button>
+        <button id="mode-radar" data-mode="radar" aria-pressed="false">Your radar</button>
+        <button id="mode-eyes" data-mode="eyes" aria-pressed="false">Your eyes</button>
+        <span style="margin-left:10px">Layers:</span>
+        <button id="tg-cone" aria-pressed="true">View cone</button>
+        <button id="tg-sound" aria-pressed="true">Sounds</button>
+        <button id="tg-trail" aria-pressed="true">Trails</button>
+      </div>
+      <div class="radar-box">
+        <canvas id="radar" aria-label="Top-down replay"></canvas>
+        <div class="clock" id="clock">0:00</div>
+        <div class="legend">
+          <span><i style="background:var(--ct)"></i>CT</span>
+          <span><i style="background:var(--t)"></i>T</span>
+          <span><i style="background:transparent;border:2px solid var(--you)"></i>You</span>
+          <span><i style="background:transparent;border:1.5px solid var(--muted)"></i>Hollow = no clear line to you</span>
+          <span>Rings = footsteps / gunfire</span>
+        </div>
+      </div>
+      <div class="timeline">
+        <div class="tl-row">
+          <button id="play">▶ Play</button>
+          <button id="back" title="Back 5 seconds">−5s</button>
+          <button id="fwd" title="Forward 5 seconds">+5s</button>
+          <div class="speed" role="group" aria-label="Speed">
+            <button data-speed="0.25" aria-pressed="false">¼×</button>
+            <button data-speed="0.5" aria-pressed="false">½×</button>
+            <button data-speed="1" aria-pressed="true">1×</button>
+            <button data-speed="2" aria-pressed="false">2×</button>
+            <button data-speed="4" aria-pressed="false">4×</button>
+          </div>
+        </div>
+        <div class="track">
+          <div class="marks" id="marks"></div>
+          <input type="range" id="scrub" min="0" max="1000" value="0" step="1" aria-label="Round time">
+        </div>
+        <div class="tl-legend">
+          <span><i style="background:var(--good)"></i>Your kill</span>
+          <span><i style="background:var(--kill)"></i>Your death</span>
+          <span><i style="background:var(--dim)"></i>Other kill</span>
+          <span><i style="background:var(--you);opacity:.6"></i>Your shot</span>
+          <span><i style="background:var(--warn)"></i>Bomb</span>
+        </div>
+      </div>
+    </div>
+
+    <aside class="side">
+      <div class="panel knew">
+        <h2>What you knew right now</h2>
+        <dl id="knew"></dl>
+        <p class="note">Radar = enemies your team had spotted. "Clear line" = nothing in the map's geometry between your eyes and theirs (smokes, doors and crouching aren't counted). Sounds are estimates by distance (footsteps ~1100u, gunfire ~2500u).</p>
+      </div>
+      <div class="panel">
+        <h2>Kill feed</h2>
+        <ul class="feed" id="feed"></ul>
+      </div>
+    </aside>
+  </section>
+
+  <section class="lower">
+    <div class="panel">
+      <h2>Your shots</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Time</th><th>Weapon</th><th>Wait</th><th>Inaccuracy</th><th>Speed</th><th>Target</th><th>Dist</th><th>Crosshair vs body</th><th>Pitch</th><th>Target speed</th><th>Result</th>
+          </tr></thead>
+          <tbody id="shots"></tbody>
+        </table>
+      </div>
+      <p class="note">Click a row to jump there. Crosshair bar: green band = his body width from your view, white line = where you aimed (left/right). Inaccuracy in <span class="hot">amber</span> = above your fresh-shot level for that gun. Treat about ±0.5° as measurement noise. Pitch above 0 = aimed above head level.</p>
+    </div>
+    <div class="panel coach">
+      <h2>Coach notes</h2>
+      <div id="coach"></div>
+    </div>
+  </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const C = { ct: "#5ea2e6", t: "#e3ac4e", you: "#f4f7fa", kill: "#ec5a52", good: "#59c08a", muted: "#8494a5", dim: "#56636f", line: "#26323f" };
+  const TICK = 64, FOOT_R = 1100, GUN_R = 2500;
+  const NOTES = {
+    "coach.dem|Round 1": {
+      p: "CT pistol round. You bought an R8 and went Long alone while all four teammates went mid.",
+      li: [
+        "Crosshair placement was good: a clear line to Telsen opened at 18.8s with your crosshair about 3° off him, and you fired 0.12s later.",
+        "It then became an 8-second standing duel at about 300 units. 10 revolver shots, 1 hit. Most shots were within 1–3° but often slightly high.",
+        "Decision: after the first misses, falling back behind Long Doors would have reset the fight instead of trading shots in the open.",
+        "Use “Your radar” mode and scrub from 15s: watch Telsen walk from Top of Mid to Outside Long before he reached you."
+      ]
+    },
+    "coach.dem|Round 2": {
+      p: "T side with a Deagle. You survived and got 2 kills.",
+      li: [
+        "Long-range one-tap headshot on Telsen at about 1500 units.",
+        "Before that kill: a clear line between you and Telsen opened at 35.6s while you were facing about 90° away, and he spotted you at 35.7s. You turned onto him by 37.3s and won, but you were exposed for about 1.7s without looking at him. Scrub to 35s in “Your eyes” mode to see it.",
+        "Irwin duel at Mid Doors: 11 shots, 2 hits. Taps about 0.45–0.5s apart stayed near your accuracy baseline. The last taps at 0.25–0.3s were rushed (amber in the table).",
+        "While he strafed, your crosshair often sat on the edge of his body. Center first, then tap."
+      ]
+    },
+    "yurp.dem|Prefire run": {
+      p: "Solo prefire route on Dust2: Outside Long → Long Doors → Long → Pit → A.",
+      li: [
+        "Use “Your eyes” mode to see when each target became visible to you.",
+        "Watch the timeline: clusters of white shot marks with no green kill mark next to them are the angles that cost you extra bullets."
+      ]
+    }
+  };
+
+  let DATA, demo, seg, tick = 0, playing = false, speed = 1, mode = "all";
+  const layers = { cone: true, sound: true, trail: true };
+  const $ = id => document.getElementById(id);
+  const cv = $("radar"), ctx = cv.getContext("2d");
+  let bgCanvas = null, view = null;
+
+  const fmt = (tk) => { const s = (tk - seg.fe) / TICK; const neg = s < 0; const a = Math.abs(s); return (neg ? "−" : "") + Math.floor(a / 60) + ":" + String(Math.floor(a % 60)).padStart(2, "0") + "." + Math.floor((a * 10) % 10); };
+  const secs = (tk) => ((tk - seg.fe) / TICK).toFixed(2);
+  const teamOf = (name) => seg.players[name]?.team;
+  const isMe = (n) => n === demo.me;
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  fetch("demos.json").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(d => {
+    DATA = d;
+    renderMenu();
+    route();
+  }).catch(err => { $("cards").innerHTML = `<div class="loading">Couldn't load the demo data (${esc(err.message)}). Reload the page to try again.</div>`; });
+
+  // ---------- menu + routing (#demo-0, #demo-0-r2; no hash = menu) ----------
+  function renderMenu() {
+    $("cards").innerHTML = DATA.demos.map((dm, i) => {
+      const s = statsOf(dm);
+      const segBtns = dm.segments.map((sg, j) => `<button data-open="${i}-${j}">${esc(sg.label)}</button>`).join("");
+      const res = dm.segments.filter(x => x.winner).map(x => {
+        const won = (x.winner === "counter-terrorist" ? 3 : 2) === x.myTeam;
+        return `<span style="color:var(${won ? "--good" : "--kill"})">${won ? "W" : "L"}</span>`;
+      }).join(" ");
+      return `<article class="card">
+        <div class="top"><h3>${esc(dm.label)}</h3><span class="meta">${esc(dm.map)}</span></div>
+        <div class="thumb"><canvas data-thumb="${i}"></canvas></div>
+        <div class="mini"><span><b>${s.k}</b>K</span><span><b>${s.d}</b>D</span><span><b>${s.hs}%</b>HS</span><span><b>${s.acc}%</b>hit</span>${s.adr != null ? `<span><b>${s.adr}</b>ADR</span>` : ""}${res ? `<span>${res}</span>` : ""}</div>
+        <div class="go"><button class="primary" data-open="${i}-0">Open replay</button>${dm.segments.length > 1 ? segBtns : ""}</div>
+        <div class="meta">${esc(dm.file)}</div>
+      </article>`;
+    }).join("") + `<div class="add-note"><b>Add a demo</b><span>Send Claude a <code>.dem</code> file in chat: a real match from Watch → Your Matches, or a quick bot game recorded with <code>exec coach</code>.</span></div>`;
+    $("cards").querySelectorAll("[data-open]").forEach(b => b.onclick = () => {
+      const [i, j] = b.dataset.open.split("-").map(Number);
+      location.hash = j ? `demo-${i}-r${j + 1}` : `demo-${i}`;
+    });
+    drawThumbs();
+  }
+  function drawThumbs() {
+    $("cards").querySelectorAll("canvas[data-thumb]").forEach(c => {
+      const dm = DATA.demos[+c.dataset.thumb], r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr);
+      const g = c.getContext("2d"); g.fillStyle = "#0a0f14"; g.fillRect(0, 0, c.width, c.height);
+      // your path across every segment, fitted to the card
+      const pts = []; for (const s of dm.segments) { const p = s.players[dm.me]; if (!p) continue; const run = []; for (let k = 0; k < p.x.length; k++) { if (p.x[k] != null && p.hp[k] > 0) run.push([p.x[k], p.y[k]]); else if (run.length) { pts.push(run.splice(0)); } } if (run.length) pts.push(run); }
+      const b = dm.bounds, pad = 200, sx = c.width / (b.maxX - b.minX + 2 * pad), sy = c.height / (b.maxY - b.minY + 2 * pad), sc = Math.min(sx, sy);
+      const ox = (c.width - (b.maxX - b.minX + 2 * pad) * sc) / 2, oy = (c.height - (b.maxY - b.minY + 2 * pad) * sc) / 2;
+      const P = (x, y) => [ox + (x - b.minX + pad) * sc, c.height - (oy + (y - b.minY + pad) * sc)];
+      const draw1 = (img) => {
+        if (img) {
+          const R = dm.radar, span = 1024 * R.scale; const [x0, y0] = P(R.pos_x, R.pos_y); g.globalAlpha = 0.5; g.drawImage(img, x0, y0, span * sc, span * sc); g.globalAlpha = 1;
+        }
+        g.lineWidth = Math.max(1.5, c.width / 300); g.strokeStyle = "#f4f7fa"; g.lineJoin = "round";
+        for (const run of pts) { if (run.length < 2) continue; g.beginPath(); run.forEach(([x, y], q) => { const [px, py] = P(x, y); q ? g.lineTo(px, py) : g.moveTo(px, py); }); g.stroke(); }
+        for (const s of dm.segments) for (const k of s.kills) { if (k.att !== dm.me || k.vic === dm.me || k.ax == null) continue; const [px, py] = P(k.ax, k.ay); g.fillStyle = "#59c08a"; g.beginPath(); g.arc(px, py, Math.max(2.5, c.width / 160), 0, 7); g.fill(); }
+      };
+      if (dm.radar) { const im = new Image(); im.onload = () => { g.fillStyle = "#0a0f14"; g.fillRect(0, 0, c.width, c.height); draw1(im); }; im.onerror = () => draw1(null); im.src = dm.radar.file; draw1(null); }
+      else draw1(null);
+    });
+  }
+  function route() {
+    const m = /^#demo-(\d+)(?:-r(\d+))?$/.exec(location.hash);
+    if (!DATA) return;
+    if (!m || !DATA.demos[+m[1]]) {
+      pause(); $("replayView").hidden = true; $("menuView").hidden = false; requestAnimationFrame(drawThumbs); return;
+    }
+    $("menuView").hidden = true; $("replayView").hidden = false;
+    const i = +m[1], j = m[2] ? Math.max(0, Math.min(DATA.demos[i].segments.length - 1, +m[2] - 1)) : 0;
+    if (demo !== DATA.demos[i]) selectDemo(i);
+    selectSeg(j);
+    requestAnimationFrame(resize);
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener("hashchange", route);
+  $("toMenu").onclick = () => { location.hash = ""; route(); };
+
+  function selectDemo(i) {
+    demo = DATA.demos[i];
+    $("demoTitle").textContent = demo.label;
+    $("segTabs").innerHTML = demo.segments.map((s, j) => `<button data-seg="${j}" aria-pressed="false">${esc(s.label)}</button>`).join("");
+    $("segTabs").querySelectorAll("button").forEach(b => b.onclick = () => { location.hash = `demo-${i}-r${+b.dataset.seg + 1}`; });
+    buildView(); buildBackground(); renderStats();
+    selectSeg(0);
+  }
+
+  function selectSeg(j) {
+    seg = demo.segments[j];
+    seg.kills = seg.kills.filter(k => k.weapon !== "world" || k.vic === demo.me);
+    $("segTabs").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.seg === j)));
+    const meTeam = seg.myTeam === 3 ? "CT" : seg.myTeam === 2 ? "T" : "";
+    $("sub").textContent = `${demo.file} · ${demo.map} · ${demo.me}${meTeam ? " on " + meTeam : ""}` + (seg.winner ? ` · ${seg.winner === "counter-terrorist" ? "CT" : "T"} won (${seg.reason.replace(/_/g, " ")})` : "");
+    tick = Math.max(seg.ticks[0], seg.fe - TICK);
+    $("scrub").max = seg.ticks[seg.ticks.length - 1] - seg.ticks[0];
+    renderMarks(); renderFeed(); renderShots(); renderCoach(); draw();
+  }
+
+  // ---------- geometry ----------
+  function buildView() {
+    if (demo.radar) { // use the game's own radar transform so positions line up with the radar image
+      const span = 1024 * demo.radar.scale;
+      view = { minX: demo.radar.pos_x, minY: demo.radar.pos_y - span, span };
+      if (!demo._img) {
+        demo._img = new Image();
+        demo._img.onload = () => { buildBackground(); draw(); };
+        demo._img.onerror = () => { demo._img = null; demo.radar = null; buildView(); buildBackground(); draw(); };
+        demo._img.src = demo.radar.file;
+      }
+      return;
+    }
+    const b = demo.bounds, pad = 220;
+    const minX = b.minX - pad, maxX = b.maxX + pad, minY = b.minY - pad, maxY = b.maxY + pad;
+    const span = Math.max(maxX - minX, maxY - minY);
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    view = { minX: cx - span / 2, minY: cy - span / 2, span };
+  }
+  function resize() {
+    const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    buildBackground(); draw();
+  }
+  const W = () => cv.width;
+  const toPx = (x, y) => [((x - view.minX) / view.span) * W(), (1 - (y - view.minY) / view.span) * W()];
+  const unitPx = () => W() / view.span;
+
+  // faint "walked area" sketch of the map from every recorded position, plus callout labels
+  function buildBackground() {
+    if (!demo || !cv.width) return;
+    bgCanvas = document.createElement("canvas"); bgCanvas.width = cv.width; bgCanvas.height = cv.height;
+    const g = bgCanvas.getContext("2d");
+    g.fillStyle = "#0a0f14"; g.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+    if (demo.radar && demo._img && demo._img.complete && demo._img.naturalWidth) {
+      g.globalAlpha = 0.85; g.drawImage(demo._img, 0, 0, bgCanvas.width, bgCanvas.height); g.globalAlpha = 1;
+      g.fillStyle = "rgba(10,15,20,0.28)"; g.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+      const fs = Math.max(10, Math.round(W() / 80));
+      g.font = `600 ${fs}px "Chakra Petch", Inter, sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
+      for (const pl of demo.places) {
+        const [px, py] = toPx(pl.x, pl.y);
+        g.fillStyle = "rgba(219,227,234,0.55)"; g.fillText(pl.name.replace(/([a-z])([A-Z])/g, "$1 $2").toUpperCase(), px, py);
+      }
+      return;
+    }
+    g.strokeStyle = "rgba(132,148,165,0.06)"; g.lineWidth = 1;
+    const step = 512 * unitPx();
+    for (let v = 0; v < bgCanvas.width; v += step) { g.beginPath(); g.moveTo(v, 0); g.lineTo(v, bgCanvas.height); g.moveTo(0, v); g.lineTo(bgCanvas.width, v); g.stroke(); }
+    const r = Math.max(5, 60 * unitPx());
+    g.fillStyle = "rgba(132,148,165,0.028)";
+    for (const s of demo.segments) for (const n in s.players) {
+      const p = s.players[n];
+      for (let i = 0; i < p.x.length; i += 2) { if (p.x[i] == null || p.hp[i] <= 0) continue; const [px, py] = toPx(p.x[i], p.y[i]); g.beginPath(); g.arc(px, py, r, 0, 7); g.fill(); }
+    }
+    const fs = Math.max(10, Math.round(W() / 75));
+    g.font = `600 ${fs}px "Chakra Petch", Inter, sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
+    for (const pl of demo.places) {
+      const [px, py] = toPx(pl.x, pl.y);
+      const label = pl.name.replace(/([a-z])([A-Z])/g, "$1 $2").toUpperCase();
+      g.fillStyle = "rgba(132,148,165,0.42)"; g.fillText(label, px, py);
+    }
+  }
+
+  // ---------- frame sampling ----------
+  function frameAt(tk) {
+    const t = seg.ticks; const t0 = t[0], stepT = t[1] - t[0] || 4;
+    let f = (tk - t0) / stepT; f = Math.max(0, Math.min(t.length - 1, f));
+    const i = Math.floor(f), j = Math.min(i + 1, t.length - 1), a = f - i;
+    return { i, j, a, near: a < 0.5 ? i : j };
+  }
+  function posOf(p, fr) {
+    const xi = p.x[fr.i], xj = p.x[fr.j];
+    if (xi == null) return null;
+    if (xj == null || p.hp[fr.j] <= 0 && p.hp[fr.i] > 0) return { x: xi, y: p.y[fr.i], yaw: p.yaw[fr.i] };
+    let dy = ((p.yaw[fr.j] - p.yaw[fr.i] + 540) % 360) - 180;
+    return { x: xi + (xj - xi) * fr.a, y: p.y[fr.i] + (p.y[fr.j] - p.y[fr.i]) * fr.a, yaw: p.yaw[fr.i] + dy * fr.a };
+  }
+
+  // ---------- drawing ----------
+  function draw() {
+    if (!seg || !cv.width) return;
+    const fr = frameAt(tick), u = unitPx();
+    ctx.drawImage(bgCanvas, 0, 0);
+    const meP = seg.players[demo.me];
+    const myTeam = seg.myTeam;
+
+    // sounds
+    if (layers.sound) {
+      const win = 1.2 * TICK;
+      for (const f of seg.footsteps) {
+        const age = tick - f.tick; if (age < 0 || age > win) continue;
+        ring(f.x, f.y, 6 + age / win * 26, teamOf(f.name), 1 - age / win, 1);
+      }
+      for (const f of seg.gunfire) {
+        const age = tick - f.tick; if (age < 0 || age > win * 0.7) continue;
+        ring(f.x, f.y, 4 + age / (win * 0.7) * 40, teamOf(f.name), (1 - age / (win * 0.7)) * 0.9, 2);
+      }
+    }
+    // trails
+    if (layers.trail) {
+      const back = Math.round(3 * TICK / (seg.ticks[1] - seg.ticks[0] || 4));
+      for (const n in seg.players) {
+        const p = seg.players[n]; if (!visible(n, fr)) continue;
+        ctx.beginPath(); let started = false;
+        for (let k = Math.max(0, fr.i - back); k <= fr.i; k++) {
+          if (p.x[k] == null || p.hp[k] <= 0) { started = false; continue; }
+          const [px, py] = toPx(p.x[k], p.y[k]); started ? ctx.lineTo(px, py) : ctx.moveTo(px, py); started = true;
+        }
+        ctx.strokeStyle = (isMe(n) ? C.you : p.team === 3 ? C.ct : C.t) + "55"; ctx.lineWidth = Math.max(1.5, W() / 500); ctx.stroke();
+      }
+    }
+    // kill markers (last 4s)
+    for (const k of seg.kills) {
+      const age = tick - k.tick; if (age < 0 || age > 4 * TICK || k.vx == null) continue;
+      const [px, py] = toPx(k.vx, k.vy), s = W() / 110;
+      ctx.strokeStyle = C.kill; ctx.globalAlpha = 1 - age / (4 * TICK); ctx.lineWidth = Math.max(2, W() / 350);
+      ctx.beginPath(); ctx.moveTo(px - s, py - s); ctx.lineTo(px + s, py + s); ctx.moveTo(px + s, py - s); ctx.lineTo(px - s, py + s); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // my view cone
+    if (layers.cone && meP) {
+      const m = posOf(meP, fr);
+      if (m && meP.hp[fr.near] > 0) {
+        const [px, py] = toPx(m.x, m.y), len = 900 * u, a = -m.yaw * Math.PI / 180, half = 45 * Math.PI / 180;
+        const grd = ctx.createRadialGradient(px, py, 0, px, py, len);
+        grd.addColorStop(0, "rgba(244,247,250,0.20)"); grd.addColorStop(1, "rgba(244,247,250,0)");
+        ctx.fillStyle = grd; ctx.beginPath(); ctx.moveTo(px, py); ctx.arc(px, py, len, a - half, a + half); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = "rgba(244,247,250,0.75)"; ctx.lineWidth = Math.max(1, W() / 600);
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(a) * len * 1.2, py + Math.sin(a) * len * 1.2); ctx.stroke();
+      }
+    }
+    // players
+    const R = Math.max(5, W() / 95);
+    const order = Object.keys(seg.players).sort((a, b) => isMe(a) - isMe(b));
+    for (const n of order) {
+      const p = seg.players[n]; const pos = posOf(p, fr); if (!pos) continue;
+      const alive = p.hp[fr.near] > 0;
+      if (!alive) continue;
+      if (!visible(n, fr)) continue;
+      const enemy = myTeam && p.team !== myTeam;
+      const seenByMe = canSee(p, fr.near);
+      const [px, py] = toPx(pos.x, pos.y), col = p.team === 3 ? C.ct : C.t;
+      // facing tick
+      const a = -pos.yaw * Math.PI / 180;
+      ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.5, W() / 450);
+      ctx.beginPath(); ctx.moveTo(px + Math.cos(a) * R, py + Math.sin(a) * R); ctx.lineTo(px + Math.cos(a) * R * 1.9, py + Math.sin(a) * R * 1.9); ctx.stroke();
+      ctx.beginPath(); ctx.arc(px, py, R, 0, 7);
+      if (enemy && !seenByMe) { ctx.fillStyle = "#0a0f14"; ctx.fill(); ctx.lineWidth = Math.max(1.5, W() / 420); ctx.strokeStyle = col; ctx.stroke(); }
+      else { ctx.fillStyle = col; ctx.fill(); }
+      // hp arc
+      const hp = p.hp[fr.near];
+      if (hp < 100) { ctx.strokeStyle = hp > 50 ? C.good : hp > 25 ? "#e3ac4e" : C.kill; ctx.lineWidth = Math.max(2, W() / 330); ctx.beginPath(); ctx.arc(px, py, R + 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * hp / 100); ctx.stroke(); }
+      if (isMe(n)) { ctx.strokeStyle = C.you; ctx.lineWidth = Math.max(2, W() / 300); ctx.beginPath(); ctx.arc(px, py, R + (hp < 100 ? 7 : 4), 0, 7); ctx.stroke(); }
+      ctx.font = `500 ${Math.max(10, Math.round(W() / 80))}px Inter, sans-serif`; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillStyle = isMe(n) ? C.you : "rgba(219,227,234,0.75)";
+      ctx.fillText(n.replace(/^- /, ""), px + R + 6, py - R);
+    }
+    $("clock").textContent = (tick < seg.fe ? "Freeze " : "") + fmt(tick);
+    $("scrub").value = tick - seg.ticks[0];
+    renderKnew(fr);
+    highlightRows();
+  }
+  function ring(x, y, rad, team, alpha, w) {
+    const [px, py] = toPx(x, y), s = W() / 640;
+    ctx.strokeStyle = team === 3 ? C.ct : team === 2 ? C.t : C.muted; ctx.globalAlpha = Math.max(0, alpha) * 0.8; ctx.lineWidth = w * Math.max(1, s);
+    ctx.beginPath(); ctx.arc(px, py, rad * s, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  function visible(n, fr) {
+    const p = seg.players[n]; if (!seg.myTeam || p.team === seg.myTeam || mode === "all") return true;
+    if (mode === "radar") return p.spotted[fr.near] === 1;
+    if (mode === "eyes") return canSee(p, fr.near);
+    return true;
+  }
+  // exact wall check when the map geometry was available at export time, otherwise the game's approximate check
+  const canSee = (p, i) => p.los ? p.los[i] === 1 : p.seen[i] === 1;
+
+  // ---------- side panel ----------
+  function renderKnew(fr) {
+    const meP = seg.players[demo.me]; if (!meP) { $("knew").innerHTML = ""; return; }
+    const myTeam = seg.myTeam;
+    let ct = 0, t = 0; const radar = [], eyes = [];
+    for (const n in seg.players) {
+      const p = seg.players[n]; if (p.hp[fr.near] <= 0 || p.x[fr.near] == null) continue;
+      p.team === 3 ? ct++ : t++;
+      if (myTeam && p.team !== myTeam) {
+        if (p.spotted[fr.near]) radar.push(`<span class="chip ${p.team === 3 ? "ct" : "t"}">${esc(n.replace(/^- /, ""))} · ${esc(pretty(p.place[fr.near]))}</span>`);
+        if (canSee(p, fr.near)) eyes.push(`<span class="chip ${p.team === 3 ? "ct" : "t"}">${esc(n.replace(/^- /, ""))}</span>`);
+      }
+    }
+    const mx = meP.x[fr.near], my = meP.y[fr.near];
+    const heard = [];
+    if (mx != null) {
+      const seen = new Set();
+      for (const f of seg.footsteps) { const age = tick - f.tick; if (age < 0 || age > 2 * TICK) continue; if (teamOf(f.name) === myTeam || seen.has("f" + f.name)) continue; const d = Math.hypot(f.x - mx, f.y - my); if (d <= FOOT_R) { seen.add("f" + f.name); heard.push(`footsteps ${Math.round(d)}u ${dirWord(f.x - mx, f.y - my)}`); } }
+      for (const f of seg.gunfire) { const age = tick - f.tick; if (age < 0 || age > 2 * TICK) continue; if (teamOf(f.name) === myTeam || seen.has("g" + f.name)) continue; const d = Math.hypot(f.x - mx, f.y - my); if (d <= GUN_R) { seen.add("g" + f.name); heard.push(`gunfire ${Math.round(d)}u ${dirWord(f.x - mx, f.y - my)}`); } }
+    }
+    const hp = meP.hp[fr.near];
+    const lastBomb = seg.bomb.filter(b => b.tick <= tick).pop();
+    const bombTxt = lastBomb ? (lastBomb.kind === "planted" ? `Planted ${((tick - lastBomb.tick) / TICK).toFixed(0)}s ago` : lastBomb.kind) : "Not planted";
+    $("knew").innerHTML = `
+      <dt>Alive</dt><dd class="alive"><span class="ct">CT ${ct}</span> vs <span class="t">T ${t}</span></dd>
+      <dt>You</dt><dd>${hp > 0 ? `${esc(pretty(meP.place[fr.near]))} · ${hp} hp<div class="hpbar"><div style="width:${hp}%"></div></div>` : '<span style="color:var(--kill)">Dead</span>'}</dd>
+      <dt>On radar</dt><dd>${myTeam ? (radar.join("") || '<span class="none">No enemies spotted</span>') : '<span class="none">n/a</span>'}</dd>
+      <dt>Clear line</dt><dd>${myTeam ? (eyes.join("") || '<span class="none">Nobody</span>') : '<span class="none">n/a</span>'}</dd>
+      <dt>Heard (2s)</dt><dd>${heard.length ? heard.map(esc).join("<br>") : '<span class="none">Nothing nearby</span>'}</dd>
+      <dt>Bomb</dt><dd>${esc(bombTxt)}</dd>`;
+  }
+  function dirWord(dx, dy) {
+    const meP = seg.players[demo.me], fr = frameAt(tick), yaw = meP.yaw[fr.near] ?? 0;
+    const ang = Math.atan2(dy, dx) * 180 / Math.PI; const rel = ((ang - yaw + 540) % 360) - 180;
+    const a = Math.abs(rel); return a < 30 ? "ahead" : a > 150 ? "behind" : rel > 0 ? "to your left" : "to your right";
+  }
+  const pretty = (s) => (s || "—").replace(/([a-z])([A-Z])/g, "$1 $2");
+
+  function renderFeed() {
+    $("feed").innerHTML = seg.kills.map(k => {
+      const ac = k.attSide === "counter-terrorist" ? "ct" : "tt", vc = k.vicSide === "counter-terrorist" ? "ct" : "tt";
+      const nm = (n, c) => n ? `<span class="${c} ${isMe(n) ? "me" : ""}">${esc(n.replace(/^- /, ""))}</span>` : `<span class="w">world</span>`;
+      return `<li tabindex="0" data-tick="${k.tick}"><span class="t">${secs(k.tick)}s</span><span>${nm(k.att, ac)} <span class="w">${esc(k.weapon)}</span>${k.hs ? ' <span class="hs">HS</span>' : ""} → ${nm(k.vic, vc)}${k.ast ? ` <span class="w">+ ${esc(k.ast)}</span>` : ""}</span></li>`;
+    }).join("") || '<li class="none">No kills in this segment</li>';
+    $("feed").querySelectorAll("li[data-tick]").forEach(li => { const go = () => seek(+li.dataset.tick - 2 * TICK); li.onclick = go; li.onkeydown = e => { if (e.key === "Enter") go(); }; });
+  }
+
+  function renderMarks() {
+    const t0 = seg.ticks[0], span = seg.ticks[seg.ticks.length - 1] - t0, pct = (tk) => ((tk - t0) / span * 100).toFixed(3) + "%";
+    let h = `<i class="fe" style="left:${pct(seg.fe)}" title="Freeze time ends"></i>`;
+    for (const s of seg.shots) h += `<i class="shot" style="left:${pct(s.tick)}"></i>`;
+    for (const k of seg.kills) h += `<i class="${isMe(k.att) ? "k-you" : isMe(k.vic) ? "k-died" : "k-other"}" style="left:${pct(k.tick)}"></i>`;
+    for (const b of seg.bomb) h += `<i class="bomb" style="left:${pct(b.tick)}" title="Bomb ${b.kind}"></i>`;
+    $("marks").innerHTML = h;
+  }
+
+  function renderShots() {
+    const base = {};
+    for (const s of seg.shots) if (s.gap == null || s.gap > 1.5) base[s.weapon] = Math.min(base[s.weapon] ?? 9, s.inacc);
+    $("shots").innerHTML = seg.shots.map(s => {
+      const hot = base[s.weapon] != null && s.inacc > base[s.weapon] * 1.15;
+      let aim = "—";
+      if (s.yawOff != null) {
+        const scale = 32 / Math.max(3, s.halfW * 2.2); // px per degree (bar is 64px wide)
+        const bw = s.halfW * 2 * scale, x = 32 + Math.max(-31, Math.min(31, s.yawOff * scale));
+        aim = `<span class="aim"><span class="aimbar"><span class="body" style="left:${32 - bw / 2}px;width:${bw}px"></span><span class="x" style="left:${x}px"></span></span>${s.yawOff > 0 ? "+" : ""}${s.yawOff}°</span>`;
+      }
+      const res = s.hit ? `<span class="res-hit">HIT ${esc(s.hitgroup || "")} −${s.dmg}</span>` : `<span class="res-miss">miss</span>`;
+      return `<tr tabindex="0" data-tick="${s.tick}">
+        <td>${secs(s.tick)}s</td><td>${esc(s.weapon)}</td><td>${s.gap == null ? "—" : s.gap + "s"}</td>
+        <td class="${hot ? "hot" : ""}">${s.inacc == null ? "—" : s.inacc.toFixed(3)}</td><td>${s.speed ?? "—"}</td>
+        <td>${esc((s.target || "—").replace(/^- /, ""))}</td><td>${s.dist ? s.dist + "u" : "—"}</td><td>${aim}</td>
+        <td>${s.pitchOff == null ? "—" : (s.pitchOff > 0 ? "+" : "") + s.pitchOff + "°"}</td><td>${s.tSpeed ?? "—"}</td><td>${res}</td></tr>`;
+    }).join("") || `<tr><td colspan="11" class="none">No shots in this segment</td></tr>`;
+    $("shots").querySelectorAll("tr[data-tick]").forEach(tr => { const go = () => { pause(); seek(+tr.dataset.tick - 16); }; tr.onclick = go; tr.onkeydown = e => { if (e.key === "Enter") go(); }; });
+  }
+  function highlightRows() {
+    let cur = null;
+    for (const tr of $("shots").querySelectorAll("tr[data-tick]")) { if (+tr.dataset.tick <= tick + 2) cur = tr; tr.classList.remove("current"); }
+    if (cur && tick - +cur.dataset.tick < 40) cur.classList.add("current");
+    for (const li of $("feed").querySelectorAll("li[data-tick]")) li.className = +li.dataset.tick <= tick ? "past" : "future";
+  }
+
+  function renderCoach() {
+    const n = NOTES[demo.file + "|" + seg.label];
+    $("coach").innerHTML = n ? `<p>${esc(n.p)}</p><ul>${n.li.map(x => `<li>${esc(x)}</li>`).join("")}</ul><p class="src">Notes written by Claude from this demo's data. Bots, not real players.</p>` : '<p class="none">No notes for this segment yet.</p>';
+  }
+
+  function statsOf(dm) {
+    const me = dm.me; let k = 0, d = 0, hs = 0, shots = 0, hits = 0, dmg = 0;
+    for (const s of dm.segments) {
+      for (const x of s.kills) { if (x.weapon === "world") continue; if (x.att === me && x.vic !== me) { k++; if (x.hs) hs++; } if (x.vic === me) d++; }
+      shots += s.shots.length; hits += s.shots.filter(x => x.hit).length;
+      dmg += s.damage.filter(x => x.att === me && x.vic !== me).reduce((a, x) => a + Math.min(x.dmg, 100), 0);
+    }
+    const rounds = dm.segments.filter(s => s.winner).length;
+    return { k, d, hs: k ? Math.round(hs / k * 100) : 0, shots, acc: shots ? Math.round(hits / shots * 100) : 0, dmg, rounds, adr: rounds ? Math.round(dmg / rounds) : null };
+  }
+  function renderStats() {
+    const s = statsOf(demo);
+    $("statline").innerHTML = `<span><b>${s.k}</b>kills</span><span><b>${s.d}</b>deaths</span><span><b>${s.hs}%</b>headshot</span><span><b>${s.shots}</b>shots</span><span><b>${s.acc}%</b>shots hit</span>` + (s.rounds ? `<span><b>${s.adr}</b>damage / round</span>` : `<span><b>${s.dmg}</b>damage</span>`);
+  }
+
+  // ---------- playback ----------
+  function seek(tk) { tick = Math.max(seg.ticks[0], Math.min(seg.ticks[seg.ticks.length - 1], tk)); draw(); }
+  function pause() { playing = false; $("play").textContent = "▶ Play"; }
+  let last = 0;
+  function loop(ts) {
+    if (playing) {
+      const dt = Math.min(0.1, (ts - last) / 1000);
+      tick += dt * TICK * speed;
+      if (tick >= seg.ticks[seg.ticks.length - 1]) { tick = seg.ticks[seg.ticks.length - 1]; pause(); }
+      draw();
+    }
+    last = ts; requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+  $("play").onclick = () => { if (!seg) return; if (tick >= seg.ticks[seg.ticks.length - 1]) tick = seg.ticks[0]; playing = !playing; $("play").textContent = playing ? "❚❚ Pause" : "▶ Play"; };
+  $("back").onclick = () => seek(tick - 5 * TICK);
+  $("fwd").onclick = () => seek(tick + 5 * TICK);
+  $("scrub").oninput = (e) => { if (seg) seek(seg.ticks[0] + +e.target.value); };
+  document.querySelectorAll(".speed button").forEach(b => b.onclick = () => { speed = +b.dataset.speed; document.querySelectorAll(".speed button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); });
+  document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { mode = b.dataset.mode; document.querySelectorAll("[data-mode]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); draw(); });
+  [["tg-cone", "cone"], ["tg-sound", "sound"], ["tg-trail", "trail"]].forEach(([id, k]) => $(id).onclick = (e) => { layers[k] = !layers[k]; e.currentTarget.setAttribute("aria-pressed", String(layers[k])); draw(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest("input,select,textarea")) return;
+    if (e.code === "Space") { e.preventDefault(); $("play").click(); }
+    if (e.key === "ArrowLeft") seek(tick - TICK); if (e.key === "ArrowRight") seek(tick + TICK);
+  });
+  new ResizeObserver(resize).observe(cv);
+})();
+</script>
