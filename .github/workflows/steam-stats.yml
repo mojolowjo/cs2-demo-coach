@@ -1,0 +1,79 @@
+# Fetches m0j's lifetime CS2 stats from the Steam Web API once a day and commits them as data/steam/*.json.
+# The API key lives only in the repo secret STEAM_API_KEY (Settings → Secrets and variables → Actions).
+# Nothing written to the repo contains the key.
+name: Steam stats
+
+on:
+  schedule:
+    - cron: "17 11 * * *"   # daily, 11:17 UTC (3:17 AM Pacific)
+  workflow_dispatch: {}      # "Run workflow" button in the Actions tab
+
+permissions:
+  contents: write
+
+concurrency:
+  group: steam-stats
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    env:
+      STEAM_ID: "76561198147473727"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the secret is set
+        env:
+          STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
+        run: |
+          if [ -z "$STEAM_API_KEY" ]; then
+            echo "::error::Add the STEAM_API_KEY secret: Settings → Secrets and variables → Actions → New repository secret"
+            exit 1
+          fi
+
+      - name: Fetch stats and playtime
+        env:
+          STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p data/steam/history
+          curl -sS --fail -o /tmp/stats.json \
+            "https://api.steampowered.com/ISteamUserStats/GetUserStatsForGame/v2/?appid=730&steamid=${STEAM_ID}&key=${STEAM_API_KEY}" \
+            || { echo "::error::Steam refused the stats request. Check the key, and that your profile's Game details are Public."; exit 1; }
+          curl -sS --fail -o /tmp/owned.json \
+            "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?steamid=${STEAM_ID}&include_played_free_games=1&appids_filter%5B0%5D=730&key=${STEAM_API_KEY}" \
+            || echo '{}' > /tmp/owned.json
+
+      - name: Write data/steam/latest.json and a dated snapshot
+        run: |
+          python3 - <<'PY'
+          import json, datetime, os
+          raw = json.load(open("/tmp/stats.json")).get("playerstats", {})
+          if not raw.get("stats"):
+              raise SystemExit("No stats in Steam's answer (private Game details?): " + json.dumps(raw)[:300])
+          owned = json.load(open("/tmp/owned.json")).get("response", {}).get("games", [])
+          cs = next((g for g in owned if g.get("appid") == 730), {})
+          now = datetime.datetime.now(datetime.timezone.utc)
+          out = {
+              "fetched_at": now.isoformat(timespec="seconds"),
+              "steamid": raw.get("steamID"),
+              "playtime_minutes": cs.get("playtime_forever"),
+              "playtime_2weeks_minutes": cs.get("playtime_2weeks"),
+              "achievements_unlocked": len(raw.get("achievements", [])),
+              "stats": {s["name"]: s["value"] for s in raw["stats"]},
+          }
+          text = json.dumps(out, indent=1, sort_keys=True)
+          open("data/steam/latest.json", "w").write(text + "\n")
+          open(f"data/steam/history/{now:%Y-%m-%d}.json", "w").write(text + "\n")
+          print(f"{len(out['stats'])} stats, playtime {out['playtime_minutes']} min")
+          PY
+
+      - name: Commit if anything changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/steam
+          if git diff --cached --quiet; then echo "No change"; exit 0; fi
+          git commit -m "Steam stats $(date -u +%Y-%m-%d)"
+          git push
