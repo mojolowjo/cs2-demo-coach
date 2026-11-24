@@ -150,6 +150,9 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
 .head-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .nav { display: flex; gap: 8px; flex-wrap: wrap; }
 .nav button { font-weight: 600; }
+.nav { align-items: center; }
+#checkBtn[aria-busy="true"] { opacity: .7; cursor: progress; }
+.check-status { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
 .career-wrap, .recent-wrap { display: grid; gap: 12px; }
 .career { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 132px), 1fr)); gap: 10px; }
 .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
@@ -205,6 +208,8 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
     <p class="menu-intro">Post-match reviews from your demos: 2D replays, what you could see and hear, and every shot broken down.</p>
     <nav class="nav" aria-label="Pages">
       <button data-go="history">Match history →</button>
+      <button id="checkBtn" hidden>↻ Check for new matches</button>
+      <span class="check-status" id="checkStatus" role="status" aria-live="polite"></span>
     </nav>
     <section class="career-wrap">
       <h2>Steam lifetime <span class="h2sub" id="steamWhen"></span></h2>
@@ -390,6 +395,28 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
     if (st) return { k: st.kills, d: st.deaths, a: st.assists, hs: Math.round(st.headshot_pct), adr: Math.round(st.adr), kast: Math.round(st.kast), rounds: st.rounds_played, hsk: st.headshot_kills, dmg: st.adr * st.rounds_played };
     return { k: f.k, d: f.d, a: 0, hs: f.hs, adr: null, kast: null, rounds: 0, hsk: Math.round(f.k * f.hs / 100), dmg: 0 };
   }
+  // ---------- "Check for new matches" (only when served by the laptop, which has /api/*) ----------
+  const timeAgo = (iso) => { if (!iso) return ""; const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; };
+  function showCheck(st) {
+    const b = $("checkBtn");
+    b.hidden = false; b.disabled = !!st.running; b.setAttribute("aria-busy", String(!!st.running));
+    b.textContent = st.running ? "Checking…" : "↻ Check for new matches";
+    $("checkStatus").textContent = st.running ? "Steam stats, new matches, parsing (can take a minute)" : (st.finished ? `${st.message} (${timeAgo(st.finished)})` : "");
+  }
+  async function pollCheck(reloadOnNew) {
+    try {
+      const st = await (await fetch("api/status", { cache: "no-store" })).json();
+      showCheck(st);
+      if (st.running) return setTimeout(() => pollCheck(true), 2000);
+      if (reloadOnNew && st.new) setTimeout(() => location.reload(), 1200);
+    } catch { /* not on the laptop (artifact / GitHub Pages): no button */ }
+  }
+  fetch("api/status", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(st => { if (st) { showCheck(st); if (st.running) pollCheck(true); } }).catch(() => {});
+  $("checkBtn").onclick = async () => {
+    try { showCheck(await (await fetch("api/check", { method: "POST" })).json()); setTimeout(() => pollCheck(true), 1500); }
+    catch { $("checkStatus").textContent = "Couldn't reach the laptop."; }
+  };
+
   // ---------- Steam lifetime (steam.json = data/steam/latest.json from the repo's daily job) ----------
   let STEAM = null;
   fetch("steam.json").then(r => r.ok ? r.json() : null).then(j => { STEAM = j; if (DATA) renderSteam(); }).catch(() => {});

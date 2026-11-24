@@ -6,6 +6,7 @@ usage (from CS2Room\\.venv\\Scripts\\python.exe):
   cs2room.py check      only look for new matches and download their demos into demos\\inbox
   cs2room.py process    only parse demos in demos\\inbox, add them to match history, archive them
   cs2room.py build      only rebuild site\\
+  cs2room.py serve      web server for site\\ on port 8080, with the "Check for new matches" button (POST /api/check)
   cs2room.py listen     match-over listener for CS2 Game State Integration (port 3000); runs the pipeline after a match ends
 
 Folder layout: see laptop/README.md. Private settings come from config\\secrets.dpapi (Windows-encrypted)
@@ -120,7 +121,9 @@ def check_matches():
                           capture_output=True, text=True, timeout=180, **NO_WINDOW)
     try: res = json.loads(node.stdout)
     except Exception: raise RuntimeError("demo bot gave no answer: " + (node.stderr or "")[-300:])
-    if res.get("error"): log("demo bot: " + res["error"])
+    if res.get("error"):
+        log("demo bot: " + res["error"])
+        if not any(r.get("url") for r in res.get("results", [])): raise RuntimeError(res["error"])
     got = 0
     os.makedirs(INBOX, exist_ok=True)
     for r in res.get("results", []):
@@ -229,6 +232,58 @@ def steam_stats_safe():
     try: steam_stats()
     except Exception as e: log(f"steam error: {e}")
 
+# ---------- web server for site\ + the "Check for new matches" button ----------
+SITE_PORT = 8080
+
+def serve():
+    from functools import partial
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+    status = {"running": False, "started": None, "finished": None, "new": 0, "message": "No check yet since the laptop started."}
+    lock = threading.Lock()
+
+    def do_check():
+        try:
+            with RunLock():
+                steam_stats_safe()
+                got = 0
+                try: got = check_matches()
+                except Exception as e: log(f"check error: {e}"); status["message"] = f"Couldn't check Valve matches: {e}"
+                processed = process_inbox()
+                build_site()
+            status["new"] = processed
+            if not status["message"].startswith("Couldn't"):
+                status["message"] = f"Found {processed} new match{'es' if processed != 1 else ''}." if processed else "No new matches."
+        except Exception as e:
+            status["message"] = f"Check failed: {e}"
+        finally:
+            status["running"] = False
+            status["finished"] = datetime.datetime.now().isoformat(timespec="seconds")
+
+    class H(SimpleHTTPRequestHandler):
+        def end_headers(self):
+            if self.path.split("?")[0].endswith((".json", ".html", "/")) or self.path.startswith("/api/"):
+                self.send_header("Cache-Control", "no-store")
+            super().end_headers()
+        def _json(self, code, obj):
+            body = json.dumps(obj).encode()
+            self.send_response(code); self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+        def do_GET(self):
+            if self.path.startswith("/api/status"): return self._json(200, status)
+            return super().do_GET()
+        def do_POST(self):
+            if not self.path.startswith("/api/check"): return self._json(404, {"error": "not found"})
+            with lock:
+                if status["running"]: return self._json(202, status)
+                status.update(running=True, started=datetime.datetime.now().isoformat(timespec="seconds"), new=0, message="Checking…")
+            log("check started from the website button")
+            threading.Thread(target=do_check, daemon=True).start()
+            return self._json(202, status)
+        def log_message(self, *a): pass
+
+    log(f"site on port {SITE_PORT}")
+    ThreadingHTTPServer(("0.0.0.0", SITE_PORT), partial(H, directory=SITE)).serve_forever()
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
     try:
@@ -238,6 +293,7 @@ if __name__ == "__main__":
         elif cmd == "process": process_inbox(); build_site()
         elif cmd == "build": build_site()
         elif cmd == "listen": listen()
+        elif cmd == "serve": serve()
         else: print(__doc__)
     except Exception as e:
         log(f"{cmd} failed: {e}"); sys.exit(1)

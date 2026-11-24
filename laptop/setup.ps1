@@ -44,7 +44,9 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   Refresh-Path
 }
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw "Node installed but not found yet. Close PowerShell, open a new one, and run setup.ps1 again." }
-Push-Location "$App\laptop"; npm install --omit=dev --no-audit --no-fund --silent; Pop-Location
+# run npm through cmd so PowerShell doesn't treat npm's notices as errors, and stop if it really fails
+& cmd /c "cd /d `"$App\laptop`" && npm install --omit=dev --no-audit --no-fund"
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$App\laptop\node_modules\globaloffensive")) { throw "npm install failed (see the messages above)" }
 Write-Host "Node ready" -ForegroundColor Green
 
 # 5. Secrets: encrypt with this Windows account (DPAPI), then remove the plain file
@@ -67,7 +69,8 @@ if (-not (Get-NetFirewallRule -DisplayName "CS2Room site" -ErrorAction SilentlyC
   Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile -Command $rules"
 }
 
-# 7. Scheduled tasks (current user)
+# 7. Scheduled tasks (current user). Restart the site task so a new server version takes over.
+Stop-ScheduledTask -TaskName "CS2Room site" -ErrorAction SilentlyContinue
 $pyw = "$Venv\Scripts\pythonw.exe"
 $main = "`"$App\laptop\cs2room.py`""
 $always = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 99 -RestartInterval (New-TimeSpan -Minutes 1)
@@ -75,7 +78,7 @@ $short = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingO
 $logon = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 
 Register-ScheduledTask -TaskName "CS2Room site" -Force -Settings $always -Trigger $logon `
-  -Action (New-ScheduledTaskAction -Execute $pyw -Argument "-m http.server 8080 --bind 0.0.0.0 --directory `"$Root\site`"" -WorkingDirectory $Root) | Out-Null
+  -Action (New-ScheduledTaskAction -Execute $pyw -Argument "$main serve" -WorkingDirectory $Root) | Out-Null
 Register-ScheduledTask -TaskName "CS2Room listener" -Force -Settings $always -Trigger $logon `
   -Action (New-ScheduledTaskAction -Execute $pyw -Argument "$main listen" -WorkingDirectory $Root) | Out-Null
 Register-ScheduledTask -TaskName "CS2Room backup check" -Force -Settings $short `

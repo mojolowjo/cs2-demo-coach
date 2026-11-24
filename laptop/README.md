@@ -25,7 +25,7 @@ CS2 config file for the gaming PC.
 
 | Task | When | What |
 |---|---|---|
-| CS2Room site | at logon, always on | `http.server 8080` on `site\` |
+| CS2Room site | at logon, always on | `cs2room.py serve`: site\ on 8080 plus `GET /api/status`, `POST /api/check` (the page's "Check for new matches" button, shown only when served by the laptop) |
 | CS2Room listener | at logon, always on | `cs2room.py listen`: CS2 Game State Integration on port 3000. On "match over" it runs steam → check → process → build at +2, +5, +10, +20, +40, +70 min until the demo arrives |
 | CS2Room backup check | every 30 min | `cs2room.py run` (catches matches the listener missed) |
 | CS2Room update | every 6 h | `update.ps1`: refresh `app\` from GitHub, rebuild the site |
@@ -34,7 +34,7 @@ CS2 config file for the gaming PC.
 - `cs2room.py`: everything above. Secrets come from `config\secrets.dpapi` (or the plain JSON before setup).
   New matches: `ICSGOPlayers_730/GetNextMatchSharingCode` with the match-history auth code, starting from `state.json`'s
   `last_share_code` (first run also fetches the match the original token points at).
-- `fetch_demo.js`: logs in the bot account `m0j_demobot` (Steam Guard off, CS2 in library), connects to the CS2 game coordinator,
+- `fetch_demo.js`: logs in the bot account `m0j_demobot` (Steam Guard must be OFF: Steam turns email Guard on by itself after the email is verified; CS2 in library), connects to the CS2 game coordinator,
   `requestGame(shareCode)` → replay URL (`.dem.bz2`). Credentials arrive on stdin, never on the command line.
 - The GSI config only asks CS2 for the `map` block, and the listener only reacts to `map.phase == "gameover"`: post-match only.
 

@@ -20,7 +20,9 @@ try {
   robocopy "$tmp\cs2-demo-coach-main" $App /MIR /XD node_modules /NFL /NDL /NJH /NJS /NP | Out-Null
   if ($LASTEXITCODE -ge 8) { throw "robocopy failed with code $LASTEXITCODE" }
 
-  if ((Get-FileHash "$App\laptop\package.json").Hash -ne $before) { Push-Location "$App\laptop"; npm install --omit=dev --no-audit --no-fund --silent; Pop-Location }
+  if ((Get-FileHash "$App\laptop\package.json").Hash -ne $before -or -not (Test-Path "$App\laptop\node_modules\globaloffensive")) {
+    & cmd /c "cd /d `"$App\laptop`" && npm install --omit=dev --no-audit --no-fund" | Out-Null
+  }
   & (Join-Path $Root ".venv\Scripts\python.exe") "$App\laptop\cs2room.py" build | Out-Null
   Log "app refreshed from GitHub, site rebuilt"
   Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
