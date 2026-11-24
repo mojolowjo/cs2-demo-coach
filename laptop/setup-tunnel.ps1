@@ -16,7 +16,13 @@ New-Item -ItemType Directory -Force -Path $Cfg, $Tools | Out-Null
 
 # 1. GitHub key
 $keyFile = Join-Path $Cfg "github.dpapi"
-if ((Test-Path $keyFile) -and -not ($args -contains "-NewKey")) {
+$handoff = Join-Path $Cfg "github.key.txt"   # a key dropped here (e.g. by Claude) is encrypted and the plain file deleted
+if (Test-Path $handoff) {
+  $plain = (Get-Content $handoff -Raw).Trim()
+  ConvertTo-SecureString $plain -AsPlainText -Force | ConvertFrom-SecureString | Set-Content $keyFile
+  Remove-Item $handoff -Force; $plain = $null
+  Write-Host "GitHub key from config\github.key.txt saved (encrypted) and the plain file deleted." -ForegroundColor Green
+} elseif ((Test-Path $keyFile) -and -not ($args -contains "-NewKey")) {
   Write-Host "GitHub key already saved (run with -NewKey to replace it)." -ForegroundColor DarkGray
 } else {
   Write-Host "Paste the GitHub key (it starts with github_pat_). Nothing shows while you paste; press Enter after." -ForegroundColor Cyan
