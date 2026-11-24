@@ -11,7 +11,7 @@ python3 -I tools/aim.py DEMO.dem [--reaction 150 220] [--json out.json]
 ## m0j's numbers to keep in mind
 - Reaction time: **150–220 ms** (online tests ~170 ms average). A click less than ~150 ms after the crosshair lands can't be a
   reaction to seeing it there: it was decided while the crosshair was still moving.
-- Sensitivity 1, 800 DPI → eDPI 800, about **52 cm / 360°**. Pulsar Xlite V3 eS, 500 Hz, Motion Sync on (Nov 2026).
+- Sensitivity 1, 800 DPI → eDPI 800, about **52 cm / 360°**. Pulsar Xlite V3 eS, 500 Hz; Motion Sync turned off on Nov 23 2026 (sessions before that had it on).
 - His drill goal (Nov 2026): **track the head, then click** (not flick-click). He is already good at timed flick-clicks.
 
 ## Data sources
