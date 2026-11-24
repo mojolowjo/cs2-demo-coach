@@ -45,7 +45,9 @@ def build(app, out, store=None, steam=None):
     for png in glob.glob(os.path.join(store, "radar_*.png")):
         shutil.copy(png, out)
     if os.path.exists(steam):
-        shutil.copy(steam, os.path.join(out, "steam.json"))
+        st = json.load(open(steam, encoding="utf-8"))
+        st.pop("steamid", None)                      # the site can be reached from outside: keep the account ID off it
+        json.dump(st, open(os.path.join(out, "steam.json"), "w"), separators=(",", ":"))
     old = os.path.join(out, "demos.json")
     if os.path.exists(old): os.remove(old)
     open(os.path.join(out, ".nojekyll"), "w").close()

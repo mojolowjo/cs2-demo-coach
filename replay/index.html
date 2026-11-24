@@ -164,6 +164,8 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
 .nav button { font-weight: 600; }
 .nav { align-items: center; }
 #checkBtn[aria-busy="true"] { opacity: .7; cursor: progress; }
+.steam-in { font-size: 13px; color: var(--muted); align-self: center; text-decoration: underline; text-underline-offset: 3px; }
+.steam-in:hover { color: var(--fg); }
 .check-status { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
 .career-wrap, .recent-wrap { display: grid; gap: 12px; }
 .career { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 132px), 1fr)); gap: 10px; }
@@ -320,6 +322,7 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
       <button data-go="history">Matches →</button>
       <button data-go="practice">Practice →</button>
       <button id="checkBtn" hidden>↻ Check for new matches</button>
+      <a class="steam-in" id="steamIn" hidden href="auth/steam">Sign in through Steam to check for matches</a>
       <span class="check-status" id="checkStatus" role="status" aria-live="polite"></span>
     </nav>
     <section class="career-wrap">
@@ -564,9 +567,26 @@ details.rec > summary:hover { background: var(--panel-2); border-radius: 8px; }
       if (reloadOnNew && st.new) setTimeout(() => location.reload(), 1200);
     } catch { /* not on the laptop (artifact / GitHub Pages): no button */ }
   }
-  fetch("api/status", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(st => { if (st) { showCheck(st); if (st.running) pollCheck(true); } }).catch(() => {});
+  // at home anyone can check; through the tunnel only players signed in through Steam who are on the laptop's allowed list
+  let ME = null;
+  Promise.all([fetch("api/status", { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null),
+               fetch("api/me", { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null)])
+    .then(([st, me]) => {
+      if (!st) return;                                   // not on the laptop (artifact): nothing to show
+      ME = me || { canCheck: true };
+      if (ME.canCheck) { showCheck(st); if (st.running) pollCheck(true); }
+      else {
+        const a = $("steamIn"); a.hidden = false;
+        a.href = "auth/steam?r=" + encodeURIComponent(location.hash || "#p-m0j");
+        if (ME.steamid) { a.textContent = "Signed in, but this Steam account can't check for matches · sign out"; a.href = "auth/logout?r=" + encodeURIComponent(location.hash); }
+      }
+    });
   $("checkBtn").onclick = async () => {
-    try { showCheck(await (await fetch("api/check", { method: "POST" })).json()); setTimeout(() => pollCheck(true), 1500); }
+    try {
+      const r = await fetch("api/check", { method: "POST" }); const st = await r.json();
+      if (r.status === 403) { $("checkStatus").textContent = st.message; return; }
+      showCheck(st); setTimeout(() => pollCheck(true), 1500);
+    }
     catch { $("checkStatus").textContent = "Couldn't reach the laptop."; }
   };
 

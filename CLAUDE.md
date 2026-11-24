@@ -53,7 +53,10 @@ After changing the tools, archived demos can be rebuilt with `cs2room.py reproce
 **https://mojolowjo.github.io/cs2-demo-coach/** is now only a launcher (`launcher/index.html`, published by `.github/workflows/pages.yml`).
 The real site runs on the laptop; the laptop exposes it through a Cloudflare quick tunnel (random `*.trycloudflare.com` address that
 changes on restart) and commits the current address to `data/tunnel.json`; the launcher reads it (Pages copy + raw.githubusercontent)
-and redirects. Status (Nov 24 2026): pages built; tunnel, the laptop's GitHub push key and a site password login are the next steps.
+and redirects. No password (m0j's choice). The site hides his SteamID; the "Check for new matches" button works at home (LAN, no Cloudflare
+header) or for visitors signed in through Steam (OpenID, `/auth/steam`) whose SteamID64 is in `CS2Room\config\site_auth.json`
+"allowed" (created with his ID). Status (Nov 24 2026): hub, launcher and Steam sign-in built; next: the tunnel itself and the
+laptop's GitHub push key for `data/tunnel.json`.
 The laptop site opens on the CS2 ROOM hub (player buttons, `PLAYERS` in `replay/index.html`); `#p-m0j` is m0j's page. Friends later.
 The claude.ai artifact (link above) is the older copy; update it too only if m0j still wants it.
 

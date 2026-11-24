@@ -8,6 +8,7 @@ usage (from CS2Room\\.venv\\Scripts\\python.exe):
   cs2room.py build      only rebuild site\\
   cs2room.py reprocess  run every archived demo through the current tools again (after updates)
   cs2room.py serve      web server for site\\ on port 8080, with the "Check for new matches" button (POST /api/check)
+                        and "Sign in through Steam" (/auth/steam): through the tunnel only signed-in, allowed players can check
   cs2room.py listen     match-over listener for CS2 Game State Integration (port 3000); runs the pipeline after a match ends
 
 Folder layout: see laptop/README.md. Private settings come from config\\secrets.dpapi (Windows-encrypted)
@@ -260,6 +261,41 @@ def steam_stats_safe():
 
 # ---------- web server for site\ + the "Check for new matches" button ----------
 SITE_PORT = 8080
+AUTH = os.path.join(CONFIG, "site_auth.json")   # {"secret": hex for signing sessions, "allowed": [SteamID64, ...]}
+STEAM_OPENID = "https://steamcommunity.com/openid/login"
+SESSION_DAYS = 90
+
+def auth_conf():
+    """Session signing secret + who may press the check button from outside the home network. Created on first use:
+    allowed = the SteamID in data/steam/latest.json (m0j). Add friends' SteamID64s to "allowed" to let them check too."""
+    try: c = json.load(open(AUTH, encoding="utf-8"))
+    except Exception: c = {}
+    changed = False
+    if not c.get("secret"): c["secret"] = os.urandom(32).hex(); changed = True
+    if not c.get("allowed"):
+        try: c["allowed"] = [str(json.load(open(os.path.join(DATA, "steam", "latest.json"), encoding="utf-8"))["steamid"])]
+        except Exception: c["allowed"] = []
+        changed = True
+    if changed:
+        os.makedirs(CONFIG, exist_ok=True)
+        json.dump(c, open(AUTH, "w", encoding="utf-8"), indent=1)
+    return c
+
+def _sign(secret, text):
+    import hmac, hashlib
+    return hmac.new(bytes.fromhex(secret), text.encode(), hashlib.sha256).hexdigest()
+
+def steam_verify(params):
+    """Ask Steam whether this sign-in response is genuine; returns the SteamID64 or None."""
+    import re
+    q = {k: v for k, v in params.items() if k.startswith("openid.")}
+    q["openid.mode"] = "check_authentication"
+    req = urllib.request.Request(STEAM_OPENID, data=urllib.parse.urlencode(q).encode(),
+                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        ok = "is_valid:true" in r.read().decode("utf-8", "replace")
+    m = re.fullmatch(r"https://steamcommunity\.com/openid/id/(\d{17})", params.get("openid.claimed_id", ""))
+    return m.group(1) if ok and m else None
 
 def serve():
     from functools import partial
@@ -294,11 +330,70 @@ def serve():
             body = json.dumps(obj).encode()
             self.send_response(code); self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+        # --- who is this? at home (LAN, no Cloudflare header) or through the tunnel, signed in or not
+        def _local(self):
+            import ipaddress
+            if self.headers.get("CF-Connecting-IP"): return False          # came in through the Cloudflare tunnel
+            try: ip = ipaddress.ip_address(self.client_address[0])
+            except ValueError: return False
+            return ip.is_private or ip.is_loopback
+        def _origin(self):
+            proto = self.headers.get("X-Forwarded-Proto") or ("https" if self.headers.get("CF-Connecting-IP") else "http")
+            return f"{proto}://{self.headers.get('Host', 'localhost')}"
+        def _session(self):
+            from http.cookies import SimpleCookie
+            try: v = SimpleCookie(self.headers.get("Cookie", ""))["cs2room"].value
+            except Exception: return None
+            try: sid, exp, sig = v.split(".")
+            except ValueError: return None
+            if int(exp) < time.time() or _sign(auth_conf()["secret"], f"{sid}.{exp}") != sig: return None
+            return sid
+        def _me(self):
+            sid = self._session(); local = self._local()
+            allowed = bool(sid and sid in auth_conf().get("allowed", []))
+            return {"local": local, "steamid": sid, "allowed": allowed, "canCheck": local or allowed}
+        def _redirect(self, where, cookie=None):
+            self.send_response(302); self.send_header("Location", where)
+            if cookie is not None: self.send_header("Set-Cookie", cookie)
+            self.send_header("Content-Length", "0"); self.end_headers()
+        def _back(self, q):
+            r = (q.get("r") or [""])[0]
+            return "/" + (r if r.startswith("#") else "")                # only ever back into this site
+
         def do_GET(self):
-            if self.path.startswith("/api/status"): return self._json(200, status)
+            path, _, qs = self.path.partition("?")
+            q = urllib.parse.parse_qs(qs)
+            if path == "/api/status": return self._json(200, status)
+            if path == "/api/me": return self._json(200, self._me())
+            if path == "/auth/steam":                                    # step 1: off to Steam's sign-in page
+                o = self._origin(); back = (q.get("r") or [""])[0]
+                ret = f"{o}/auth/return?" + urllib.parse.urlencode({"r": back})
+                return self._redirect(STEAM_OPENID + "?" + urllib.parse.urlencode({
+                    "openid.ns": "http://specs.openid.net/auth/2.0", "openid.mode": "checkid_setup",
+                    "openid.return_to": ret, "openid.realm": o,
+                    "openid.identity": "http://specs.openid.net/auth/2.0/identifier_select",
+                    "openid.claimed_id": "http://specs.openid.net/auth/2.0/identifier_select"}))
+            if path == "/auth/return":                                   # step 2: Steam sent us back; check it with Steam
+                params = {k: v[0] for k, v in q.items()}
+                sid = None
+                if params.get("openid.return_to", "").startswith(self._origin() + "/auth/return"):
+                    try: sid = steam_verify(params)
+                    except Exception as e: log(f"steam sign-in check failed: {e}")
+                if not sid: return self._redirect(self._back(q))
+                exp = str(int(time.time()) + SESSION_DAYS * 86400)
+                val = f"{sid}.{exp}.{_sign(auth_conf()['secret'], f'{sid}.{exp}')}"
+                secure = "; Secure" if self._origin().startswith("https") else ""
+                log(f"steam sign-in: {sid}{' (allowed to check)' if sid in auth_conf().get('allowed', []) else ''}")
+                return self._redirect(self._back(q), f"cs2room={val}; Path=/; Max-Age={SESSION_DAYS * 86400}; HttpOnly; SameSite=Lax{secure}")
+            if path == "/auth/logout":
+                return self._redirect(self._back(q), "cs2room=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")
             return super().do_GET()
+        def list_directory(self, path):                                 # no folder listings
+            self.send_error(404); return None
         def do_POST(self):
             if not self.path.startswith("/api/check"): return self._json(404, {"error": "not found"})
+            if not self._me()["canCheck"]:
+                return self._json(403, {"error": "Sign in through Steam to check for new matches.", "message": "Sign in through Steam to check for new matches."})
             with lock:
                 if status["running"]: return self._json(202, status)
                 status.update(running=True, started=datetime.datetime.now().isoformat(timespec="seconds"), new=0, message="Checking…")
