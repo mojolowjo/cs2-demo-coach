@@ -29,22 +29,7 @@ jobs:
           ref: main   # workflow_run would otherwise check out the commit from before the stats update
 
       - name: Assemble the site
-        run: |
-          set -euo pipefail
-          mkdir -p _site
-          # replay/index.html is written for claude.ai artifacts, which add the document skeleton; add it here.
-          {
-            printf '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">\n'
-            printf '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'
-            printf '<style>body{margin:0}img{max-width:100%%}</style></head><body>\n'
-            cat replay/index.html
-            printf '\n</body></html>\n'
-          } > _site/index.html
-          cp replay/demos.json _site/
-          cp replay/radar_*.png _site/ 2>/dev/null || true
-          if [ -f data/steam/latest.json ]; then cp data/steam/latest.json _site/steam.json; fi
-          touch _site/.nojekyll
-          ls -la _site
+        run: python3 tools/build_site.py . _site
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
