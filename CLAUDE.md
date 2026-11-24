@@ -37,13 +37,17 @@ Copy each attached demo into its own folder in the scratchpad. Run scripts with 
 `git pull`, then publish with `data/steam/latest.json` as the artifact file `steam.json`. The page's home shows it in "Steam lifetime"
 (tiles, top weapons, maps) and shows setup steps when the file is missing. Some counters may be CS:GO-era; say so when coaching from them.
 
-## Adding a new demo to the page (match history must keep growing)
-The workspace is wiped between sessions, so the **published artifact is the store of past matches**:
-1. `Artifact read` the page URL with `path: "demos.json"` (and the radar PNGs if needed) to get the current data.
-2. `python3 -I tools/export_replay.py out/demos.json --merge <downloaded demos.json> --demo "Label" new.dem "YYYY-MM-DD HH:MM"`
-3. Add coach notes for the new rounds to `NOTES` in `replay/index.html`.
-4. Publish `replay/index.html` to the same URL with `demos.json`, `radar_*.png` and `steam.json` (if present) as files.
-   Read the live page first: m0j may have edited it (he renamed the title once). Commit and push tool/page changes here.
+## The public site (main home of the page)
+**https://mojolowjo.github.io/cs2-demo-coach/** is built by `.github/workflows/pages.yml` from `replay/index.html`,
+`replay/demos.json`, `replay/radar_*.png` and `data/steam/latest.json` (as `steam.json`). It rebuilds on every push and after
+each nightly Steam stats run, so Steam numbers update with no Claude run. m0j chose to make it public.
+The claude.ai artifact (link above) is the older copy; update it too only if m0j still wants it.
+
+## Adding a new demo (match history must keep growing)
+`replay/demos.json` in this repo is the store of past matches.
+1. `python3 -I tools/export_replay.py replay/demos.json --merge replay/demos.json --demo "Label" new.dem "YYYY-MM-DD HH:MM"`
+2. Add coach notes for the new rounds to `NOTES` in `replay/index.html`.
+3. Commit and push. The site rebuilds itself (check the Actions tab if it doesn't appear within a few minutes).
 
 ## Coaching frame (per round)
 Rebuild what he knew (radar spots, likely-heard sounds, killfeed and alive counts, timer, money), then judge:

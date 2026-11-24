@@ -1,9 +1,8 @@
-# Demos contain Steam IDs and are large - never commit them
+# Demos are large and contain Steam IDs - never commit the .dem files themselves.
+# (The exported replay data in replay/demos.json IS committed: it powers the public GitHub Pages site.)
 *.dem
 *.dem.bz2
-# Generated replay data
-replay/demos.json
-replay/radar_*.png
 out/
+_site/
 __pycache__/
 *.pyc

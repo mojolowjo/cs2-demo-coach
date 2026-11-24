@@ -1,0 +1,62 @@
+# Builds m0j's CS2 ROOM from replay/ + data/steam/ and publishes it with GitHub Pages:
+#   https://mojolowjo.github.io/cs2-demo-coach/
+# Runs on every push to main, after each "Steam stats" run (its commits don't trigger push events), and on demand.
+name: Site
+
+on:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: ["Steam stats"]
+    types: [completed]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main   # workflow_run would otherwise check out the commit from before the stats update
+
+      - name: Assemble the site
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          # replay/index.html is written for claude.ai artifacts, which add the document skeleton; add it here.
+          {
+            printf '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">\n'
+            printf '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'
+            printf '<style>body{margin:0}img{max-width:100%%}</style></head><body>\n'
+            cat replay/index.html
+            printf '\n</body></html>\n'
+          } > _site/index.html
+          cp replay/demos.json _site/
+          cp replay/radar_*.png _site/ 2>/dev/null || true
+          if [ -f data/steam/latest.json ]; then cp data/steam/latest.json _site/steam.json; fi
+          touch _site/.nojekyll
+          ls -la _site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
