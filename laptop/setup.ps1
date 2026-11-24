@@ -44,9 +44,14 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   Refresh-Path
 }
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw "Node installed but not found yet. Close PowerShell, open a new one, and run setup.ps1 again." }
-# run npm through cmd so PowerShell doesn't treat npm's notices as errors, and stop if it really fails
-& cmd /c "cd /d `"$App\laptop`" && npm install --omit=dev --no-audit --no-fund"
-if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$App\laptop\node_modules\globaloffensive")) { throw "npm install failed (see the messages above)" }
+# The bot's packages are plain JavaScript. Install them only if missing; find npm even when it isn't on PATH.
+if (-not (Test-Path "$App\laptop\node_modules\globaloffensive")) {
+  $npm = (Get-Command npm.cmd -ErrorAction SilentlyContinue).Source
+  if (-not $npm) { $npm = Join-Path (Split-Path (Get-Command node).Source) "npm.cmd" }
+  if (-not (Test-Path $npm)) { throw "npm not found. Install Node.js LTS from nodejs.org (or: winget install OpenJS.NodeJS.LTS), then run setup again." }
+  & cmd /c "cd /d `"$App\laptop`" && `"$npm`" install --omit=dev --no-audit --no-fund"
+  if (-not (Test-Path "$App\laptop\node_modules\globaloffensive")) { throw "npm install failed (see the messages above)" }
+}
 Write-Host "Node ready" -ForegroundColor Green
 
 # 5. Secrets: encrypt with this Windows account (DPAPI), then remove the plain file

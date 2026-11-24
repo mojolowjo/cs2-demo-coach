@@ -21,7 +21,10 @@ try {
   if ($LASTEXITCODE -ge 8) { throw "robocopy failed with code $LASTEXITCODE" }
 
   if ((Get-FileHash "$App\laptop\package.json").Hash -ne $before -or -not (Test-Path "$App\laptop\node_modules\globaloffensive")) {
-    & cmd /c "cd /d `"$App\laptop`" && npm install --omit=dev --no-audit --no-fund" | Out-Null
+    $npm = (Get-Command npm.cmd -ErrorAction SilentlyContinue).Source
+    if (-not $npm) { $npm = Join-Path (Split-Path (Get-Command node).Source) "npm.cmd" }
+    if (Test-Path $npm) { & cmd /c "cd /d `"$App\laptop`" && `"$npm`" install --omit=dev --no-audit --no-fund" | Out-Null }
+    else { Log "npm not found; Node packages not updated" }
   }
   & (Join-Path $Root ".venv\Scripts\python.exe") "$App\laptop\cs2room.py" build | Out-Null
   Log "app refreshed from GitHub, site rebuilt"
