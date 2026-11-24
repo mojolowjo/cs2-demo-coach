@@ -256,13 +256,20 @@ def analyze(path, me=None, reaction=(150, 220)):
     # ---- summary
     km = kl[(kl.attacker_name == me) & (kl.victim_name != me)]
     dur = float(header.get("playback_time") or 0) or (S.tick.max() - S.tick.min()) / 64
-    taps = C[C.get("cls").notna() & ~C.spray.fillna(False).astype(bool) & (C.tSpeed.fillna(0) > 100)] if "cls" in C else C.iloc[0:0]
+    alltaps = C[C.get("cls").notna() & ~C.spray.fillna(False).astype(bool)] if "cls" in C else C.iloc[0:0]
+    moving = alltaps[alltaps.tSpeed.fillna(0) > 100]; still = alltaps[alltaps.tSpeed.fillna(0) <= 100]
     def share(x): return None if len(x) == 0 else round(float(x.mean()) * 100)
     def med(x): return None if len(x) == 0 else round(float(np.median(x)), 2)
-    classes = {}
-    for c in ("early", "timed", "grey", "tracked"):
-        x = taps[taps.cls == c]
-        classes[c] = dict(n=int(len(x)), hit=share(x.hit), err=med(x.err) if len(x) else None)
+    def classes_of(tp):
+        out = {}
+        for c in ("early", "timed", "grey", "tracked"):
+            x = tp[tp.cls == c]
+            out[c] = dict(n=int(len(x)), hit=share(x.hit), err=med(x.err) if len(x) else None)
+        return out
+    # the headline uses running bots when there are enough of them (moving-target drills), else standing bots
+    targets = "moving" if len(moving) >= 20 or len(moving) >= len(still) else "still"
+    taps = moving if targets == "moving" else still
+    classes = classes_of(taps)
     fl = {}
     if len(F):
         F["over"] = F.primaryErr > 1; F["under"] = F.primaryErr < -1
@@ -272,7 +279,7 @@ def analyze(path, me=None, reaction=(150, 220)):
                            over=share(x.over), under=share(x.under), errAbs=med(x.primaryErr.abs()))
     tw = W.ms / W.ms.sum() if len(W) else None
     out = dict(
-        version=1, player=me, map=header.get("map_name"), reaction=[lo, hi],
+        version=2, player=me, map=header.get("map_name"), reaction=[lo, hi],
         calibration=dict(headZ=head_z, fromHeadshots=n_cal, alignShiftTicks=shift, alignErrDeg=round(align_err, 3),
                          samplesPerSec=round(len(A) / max(dur, 1))),
         session=dict(minutes=round(dur / 60, 1), kills=int(len(km)), hsKills=int(km.headshot.sum()), shots=int(len(S)),
@@ -280,7 +287,8 @@ def analyze(path, me=None, reaction=(150, 220)):
                      shotsPerKill=round(len(S) / max(len(km), 1), 2),
                      weapons=S.weapon.str.replace("weapon_", "").value_counts().to_dict(),
                      sprayHitPct=share(C[C.spray.fillna(False).astype(bool)].hit) if "spray" in C else None),
-        clicks=dict(movingTaps=int(len(taps)), classes=classes, earlyShare=share(taps.cls == "early") if len(taps) else None,
+        clicks=dict(targets=targets, movingTaps=int(len(moving)), stillTaps=int(len(still)), classes=classes,
+                    other=classes_of(still if targets == "moving" else moving), earlyShare=share(taps.cls == "early") if len(taps) else None,
                     settleMedian=med(taps[taps.settle >= 16].settle) if len(taps) else None),
         flicks=dict(n=int(len(F)), medianDur=med(F.dur) if len(F) else None, tPeak=med(F.tPeak) if len(F) else None,
                     corr=share(F.corrections > 0) if len(F) else None, errPctOfAmp=med((F.primaryErr.abs() / F.amp) * 100) if len(F) else None,
@@ -304,7 +312,8 @@ def report(a):
     print(f"calibration: head point Z+{cal['headZ']} from {cal['fromHeadshots']} headshots, view samples {cal['samplesPerSec']}/s, "
           f"time shift {cal['alignShiftTicks']} ticks (match {cal['alignErrDeg']} deg)")
     lo, hi = a["reaction"]
-    print(f"taps on moving bots: {c['movingTaps']}  (click vs crosshair arriving on the head; reaction {lo}-{hi} ms)")
+    tg = c.get("targets", "moving")
+    print(f"taps on {tg} bots: {c['movingTaps'] if tg == 'moving' else c['stillTaps']}  (click vs crosshair arriving on the head; reaction {lo}-{hi} ms)")
     names = {"early": "before arriving", "timed": f"timed (<{lo} ms)", "grey": f"{lo}-{hi} ms", "tracked": f"tracked (>{hi} ms)"}
     for k, v in c["classes"].items():
         print(f"  {names[k]:<18} n={v['n']:<4} hit {v['hit']}%  median err {v['err']} deg")
