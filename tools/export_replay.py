@@ -1,5 +1,10 @@
-"""Export one or more CS2 demos into a compact JSON for the replay page.
-usage: python3 -I export_replay.py OUT_DIR/demos.json LABEL1 DEMO1 [LABEL2 DEMO2 ...]
+"""Export CS2 demos into the JSON that m0j's CS2 ROOM (replay/index.html) reads.
+
+usage:
+  python3 -I export_replay.py OUT/demos.json [--merge OLD/demos.json] \\
+      --demo "Bot match" coach.dem "2026-11-23 15:28" [--demo LABEL PATH WHEN ...] [--type practice ...]
+
+--merge keeps every match already in the published page (download its demos.json first), so match history grows.
 Also copies the map's radar image (radar_<map>.png) next to demos.json when the awpy map data is installed.
 """
 import sys, json, math, os
@@ -129,15 +134,46 @@ def export(label, path):
         out_segs.append(dict(label=s["label"], start=s["start"], fe=s["fe"], end=s["end"], winner=s["winner"], reason=s["reason"],
                              myTeam=myteam, ticks=ticks, players=players, kills=kills, shots=shots, footsteps=steps, damage=dmg, bomb=bomb,
                              gunfire=gunfire))
+    # awpy's per-player stats (KAST, ADR, openings, trades, multikills, clutches, utility). Empty for demos without rounds.
+    stats = None
+    try:
+        st = d.stats.to_pandas(); st = st[st.name == me]
+        if len(st): stats = {k: (v.item() if hasattr(v, "item") else v) for k, v in st.iloc[0].drop(["steamid", "name"]).items()}
+    except Exception as e:
+        print(f"(no awpy stats: {e})")
+    # score from my side's point of view (handles side switches)
+    won = sum(1 for s in out_segs if s["winner"] and (3 if s["winner"] == "counter-terrorist" else 2) == s["myTeam"])
+    lost = sum(1 for s in out_segs if s["winner"]) - won
     return dict(label=label, file=path.rsplit("/", 1)[-1], map=map_name, me=me, radar=radar, wallCheck=vc is not None,
+                type="match" if len(rounds) else "practice", score=[won, lost] if len(rounds) else None,
+                duration=round(float(header.get("playback_time", 0) or 0)), stats=stats,
                 places=[dict(name=r.place, x=int(r.X), y=int(r.Y)) for r in places.itertuples()],
                 bounds=dict(minX=int(alive_t.X.min()), maxX=int(alive_t.X.max()), minY=int(alive_t.Y.min()), maxY=int(alive_t.Y.max())),
                 segments=out_segs)
 
 if __name__ == "__main__":
-    out = sys.argv[1]; args = sys.argv[2:]
+    import argparse, datetime
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("out", help="output demos.json (radar PNGs are written next to it)")
+    ap.add_argument("--merge", help="existing demos.json to keep (e.g. downloaded from the published artifact)")
+    ap.add_argument("--demo", nargs=3, action="append", default=[], metavar=("LABEL", "PATH", "WHEN"),
+                    help='WHEN = local date/time played, e.g. "2026-11-23 15:28" (use "-" for the file time)')
+    ap.add_argument("--type", action="append", default=[], help="override type per --demo, in order: match | practice")
+    A = ap.parse_args()
+    out = A.out
     OUT_DIR = os.path.dirname(os.path.abspath(out)); os.makedirs(OUT_DIR, exist_ok=True)
-    demos = [export(args[i], args[i + 1]) for i in range(0, len(args), 2)]
+    demos = []
+    for i, (label, path, when) in enumerate(A.demo):
+        dd = export(label, path)
+        if when == "-": when = datetime.datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M")
+        dd["date"], dd["time"] = when.split(" ")[0], (when.split(" ") + ["00:00"])[1]
+        if i < len(A.type): dd["type"] = A.type[i]
+        demos.append(dd)
+    if A.merge:
+        old = json.load(open(A.merge))["demos"]
+        keys = {(x["file"], x.get("date"), x.get("time")) for x in demos}
+        demos = [x for x in old if (x["file"], x.get("date"), x.get("time")) not in keys] + demos
+    demos.sort(key=lambda x: (x.get("date", ""), x.get("time", "")))
     def clean(o):
         if isinstance(o, float): return None if math.isnan(o) or math.isinf(o) else o
         if isinstance(o, dict): return {k: clean(v) for k, v in o.items()}

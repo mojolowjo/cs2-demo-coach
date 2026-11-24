@@ -23,11 +23,20 @@ Copy each attached demo into its own folder in the scratchpad. Run scripts with 
   Per round: path in callouts, teammates' spots, first sightings (wall-clear time and game-spotted time, crosshair offset, time to
   first shot), every shot (wait, inaccuracy, own speed, target, distance, yaw/pitch offset, body width, wall-clear, hit/miss),
   kills/deaths/trades, damage taken.
-- `tools/export_replay.py OUT/demos.json "Label" DEMO.dem [...]`
-  Builds the data for the replay page and copies `radar_<map>.png` next to it.
-- `replay/index.html`: m0j's CS2 Room. A menu of demos, then a 2D replay with radar / "your eyes" (wall check) views,
-  a "what you knew" panel, the kill feed, a shot table and coach notes. Coach notes live in the `NOTES` object, keyed `"<demo file>|<segment label>"`.
-  Publish it as an artifact with `demos.json` and the radar PNGs as extra files. Keep the same artifact URL when updating.
+- `tools/export_replay.py OUT/demos.json [--merge OLD/demos.json] --demo "Label" DEMO.dem "YYYY-MM-DD HH:MM" [...] [--type practice]`
+  Builds the data for the replay page (positions, wall check, shots, awpy stats, score, date) and copies `radar_<map>.png` next to it.
+  WHEN is the local date/time the game was played (ask m0j or use the chat time); it drives the match history.
+- `replay/index.html`: **m0j's CS2 ROOM** (published artifact: https://claude.ai/artifact/VNDU3fgne8WG5TGgzpZ2rY).
+  Home (career stats, recent games) → Match history (`#history`: Year → Month → Day/Week/Month groups, numbered Match 1, 2, 3 within
+  each group) → replay (`#demo-N`, `#demo-N-rK`) with radar / "your eyes" (wall check) views, "what you knew", kill feed, shot table,
+  awpy stats and coach notes. Coach notes live in the `NOTES` object, keyed `"<demo file>|<segment label>"`.
+
+## Adding a new demo to the page (match history must keep growing)
+The workspace is wiped between sessions, so the **published artifact is the store of past matches**:
+1. `Artifact read` the page URL with `path: "demos.json"` (and the radar PNGs if needed) to get the current data.
+2. `python3 -I tools/export_replay.py out/demos.json --merge <downloaded demos.json> --demo "Label" new.dem "YYYY-MM-DD HH:MM"`
+3. Add coach notes for the new rounds to `NOTES` in `replay/index.html`.
+4. Publish `replay/index.html` to the same URL with `demos.json` and `radar_*.png` as files. Commit and push tool/page changes here.
 
 ## Coaching frame (per round)
 Rebuild what he knew (radar spots, likely-heard sounds, killfeed and alive counts, timer, money), then judge:

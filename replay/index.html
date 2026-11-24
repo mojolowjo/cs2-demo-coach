@@ -148,6 +148,38 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
 .mini-brand { font-family: var(--f-display); font-weight: 700; font-size: 20px; line-height: 1; display: grid; gap: 2px; }
 .mini-brand small { font-weight: 600; font-size: 10.5px; letter-spacing: 0.32em; color: var(--muted); }
 .head-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.nav { display: flex; gap: 8px; flex-wrap: wrap; }
+.nav button { font-weight: 600; }
+.career-wrap, .recent-wrap { display: grid; gap: 12px; }
+.career { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 132px), 1fr)); gap: 10px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
+.tile .v { font-family: var(--f-display); font-weight: 700; font-size: 26px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile .k { font-size: 11.5px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.tile .s { font-family: var(--f-mono); font-size: 11px; color: var(--dim); }
+/* match history */
+.history { display: grid; gap: 18px; }
+.yr { font-family: var(--f-display); font-weight: 700; font-size: 30px; margin: 8px 0 0; color: var(--fg); }
+.mo { font-family: var(--f-display); font-weight: 600; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 14px 0 8px; display: flex; gap: 10px; align-items: baseline; }
+.mo span { font-family: var(--f-mono); letter-spacing: 0; text-transform: none; color: var(--dim); font-size: 11.5px; }
+.grp { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+.grp-h { display: flex; justify-content: space-between; gap: 10px; padding: 10px 14px; background: var(--panel-2); border-bottom: 1px solid var(--line); font-size: 13px; flex-wrap: wrap; }
+.grp-h b { font-family: var(--f-display); font-weight: 600; font-size: 15px; }
+.grp-h span { font-family: var(--f-mono); color: var(--muted); font-size: 11.5px; }
+.mrow { display: grid; grid-template-columns: 92px 56px minmax(0, 1.4fr) 84px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 14px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.mrow:last-child { border-bottom: 0; }
+.mrow .n { font-family: var(--f-display); font-weight: 700; font-size: 16px; }
+.mrow .tm { font-family: var(--f-mono); color: var(--muted); font-size: 12px; }
+.mrow .lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mrow .lbl small { display: block; font-family: var(--f-mono); color: var(--muted); font-size: 11px; }
+.mrow .res { font-family: var(--f-mono); font-weight: 600; font-size: 13px; }
+.mrow .nums { font-family: var(--f-mono); font-size: 12px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
+.mrow .nums b { color: var(--fg); }
+.tag { display: inline-block; font-family: var(--f-mono); font-size: 10.5px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; vertical-align: 1px; }
+.win { color: var(--good); } .loss { color: var(--kill); } .draw { color: var(--muted); }
+@media (max-width: 720px) {
+  .mrow { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+  .mrow .tm { text-align: right; }
+}
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 </style>
 
@@ -158,13 +190,40 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
       <div class="room">CS2 <span class="ct">RO</span><span class="t">OM</span></div>
     </div>
     <p class="menu-intro">Post-match reviews from your demos: 2D replays, what you could see and hear, and every shot broken down.</p>
-    <div class="cards" id="cards"><div class="loading">Loading demos…</div></div>
+    <nav class="nav" aria-label="Pages">
+      <button data-go="history">Match history →</button>
+    </nav>
+    <section class="career-wrap">
+      <h2>Career</h2>
+      <div class="career" id="career"></div>
+      <p class="note" id="careerNote"></p>
+    </section>
+    <section class="recent-wrap">
+      <h2>Recent</h2>
+      <div class="cards" id="cards"><div class="loading">Loading demos…</div></div>
+    </section>
+  </section>
+
+  <section id="historyView" class="history" hidden>
+    <header class="top">
+      <div class="head-left">
+        <button class="back" data-go="">← Home</button>
+        <div class="mini-brand">m0j<small>CS2 ROOM</small></div>
+        <h1 style="font-size:20px">Match history<small id="histSub"></small></h1>
+      </div>
+      <div class="seg-tabs" role="group" aria-label="Group by">
+        <button data-group="day" aria-pressed="true">Day</button>
+        <button data-group="week" aria-pressed="false">Week</button>
+        <button data-group="month" aria-pressed="false">Month</button>
+      </div>
+    </header>
+    <div id="historyList"></div>
   </section>
 
   <div id="replayView" hidden>
   <header class="top">
     <div class="head-left">
-      <button class="back" id="toMenu">← Menu</button>
+      <button class="back" id="toMenu">← Home</button>
       <div class="mini-brand">m0j<small>CS2 ROOM</small></div>
       <h1 style="font-size:20px"><span id="demoTitle"></span><small id="sub">Loading demo data…</small></h1>
     </div>
@@ -308,9 +367,93 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
     route();
   }).catch(err => { $("cards").innerHTML = `<div class="loading">Couldn't load the demo data (${esc(err.message)}). Reload the page to try again.</div>`; });
 
-  // ---------- menu + routing (#demo-0, #demo-0-r2; no hash = menu) ----------
+  // ---------- career + match history ----------
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const dateOf = (dm) => { const [y, m, d] = (dm.date || "1970-01-01").split("-").map(Number); return new Date(y, m - 1, d); };
+  const resultOf = (dm) => !dm.score ? null : dm.score[0] > dm.score[1] ? "W" : dm.score[0] < dm.score[1] ? "L" : "D";
+  // per-demo line: awpy stats when the demo has rounds, otherwise counted from the replay data
+  function lineOf(dm) {
+    const st = dm.stats, f = statsOf(dm);
+    if (st) return { k: st.kills, d: st.deaths, a: st.assists, hs: Math.round(st.headshot_pct), adr: Math.round(st.adr), kast: Math.round(st.kast), rounds: st.rounds_played, hsk: st.headshot_kills, dmg: st.adr * st.rounds_played };
+    return { k: f.k, d: f.d, a: 0, hs: f.hs, adr: null, kast: null, rounds: 0, hsk: Math.round(f.k * f.hs / 100), dmg: 0 };
+  }
+  function renderCareer() {
+    const ms = DATA.demos.filter(x => x.type === "match"), pr = DATA.demos.filter(x => x.type !== "match");
+    let k = 0, d = 0, a = 0, hsk = 0, rounds = 0, dmg = 0, kastR = 0, w = 0, l = 0;
+    for (const m of ms) { const L = lineOf(m); k += L.k; d += L.d; a += L.a; hsk += L.hsk; rounds += L.rounds; dmg += L.dmg; kastR += (L.kast ?? 0) * L.rounds / 100; const r = resultOf(m); if (r === "W") w++; if (r === "L") l++; }
+    const tile = (v, kk, s = "") => `<div class="tile"><span class="v">${v}</span><span class="k">${kk}</span>${s ? `<span class="s">${s}</span>` : ""}</div>`;
+    $("career").innerHTML = [
+      tile(ms.length, "Matches played", `${w}W · ${l}L`),
+      tile(pr.length, "Practice sessions"),
+      tile(rounds, "Rounds"),
+      tile(d ? (k / d).toFixed(2) : k ? "∞" : "0", "K/D", `${k} · ${d} · ${a} K·D·A`),
+      tile(rounds ? Math.round(dmg / rounds) : "—", "ADR"),
+      tile(rounds ? Math.round(kastR / rounds * 100) + "%" : "—", "KAST"),
+      tile(k ? Math.round(hsk / k * 100) + "%" : "—", "Headshot %"),
+    ].join("");
+    $("careerNote").textContent = "Career numbers count matches only (not practice). ADR, KAST and openings come from awpy. Bot matches count too, so treat them as practice numbers until real matches are added.";
+  }
+
+  let groupMode = "day";
+  function weekStart(dt) { const x = new Date(dt); const off = (x.getDay() + 6) % 7; x.setDate(x.getDate() - off); return x; }
+  const short = (dt) => `${MONTHS[dt.getMonth()].slice(0, 3)} ${dt.getDate()}`;
+  function renderHistory() {
+    const list = DATA.demos.map((dm, i) => ({ dm, i, dt: dateOf(dm) }));
+    $("histSub").textContent = `${DATA.demos.filter(x => x.type === "match").length} matches · ${DATA.demos.filter(x => x.type !== "match").length} practice`;
+    // newest year / month / group first; inside a group the oldest game is Match 1
+    const years = [...new Set(list.map(x => x.dt.getFullYear()))].sort((a, b) => b - a);
+    let html = "";
+    for (const y of years) {
+      html += `<h2 class="yr">${y}</h2>`;
+      const inY = list.filter(x => x.dt.getFullYear() === y);
+      const months = [...new Set(inY.map(x => x.dt.getMonth()))].sort((a, b) => b - a);
+      for (const m of months) {
+        const inM = inY.filter(x => x.dt.getMonth() === m);
+        html += `<div class="mo">${MONTHS[m]} <span>${inM.length} game${inM.length === 1 ? "" : "s"}</span></div>`;
+        const keyOf = (x) => groupMode === "day" ? x.dm.date : groupMode === "week" ? weekStart(x.dt).toDateString() : "month";
+        const keys = [...new Set(inM.map(keyOf))];
+        keys.sort((a, b) => { const fa = inM.find(x => keyOf(x) === a).dt, fb = inM.find(x => keyOf(x) === b).dt; return fb - fa; });
+        for (const key of keys) {
+          const games = inM.filter(x => keyOf(x) === key).sort((a, b) => (a.dm.date + a.dm.time).localeCompare(b.dm.date + b.dm.time));
+          const first = games[0].dt;
+          let title = "";
+          if (groupMode === "day") title = `${DAYS[first.getDay()]}, ${short(first)}`;
+          else if (groupMode === "week") { const ws = weekStart(first), we = new Date(ws); we.setDate(ws.getDate() + 6); title = `Week of ${short(ws)} – ${short(we)}`; }
+          else title = `All of ${MONTHS[m]}`;
+          const mc = games.filter(g => g.dm.type === "match").length;
+          html += `<div class="grp"><div class="grp-h"><b>${esc(title)}</b><span>${mc} match${mc === 1 ? "" : "es"} · ${games.length - mc} practice</span></div>`;
+          games.forEach((g, n) => {
+            const L = lineOf(g.dm), r = resultOf(g.dm);
+            const res = r ? `<span class="res ${r === "W" ? "win" : r === "L" ? "loss" : "draw"}">${r} ${g.dm.score[0]}–${g.dm.score[1]}</span>` : `<span class="res draw">—</span>`;
+            html += `<div class="mrow">
+              <span class="n">Match ${n + 1}</span>
+              <span class="tm">${groupMode === "day" ? esc(g.dm.time) : esc(short(g.dt))}</span>
+              <span class="lbl">${esc(g.dm.label)}${g.dm.type !== "match" ? '<span class="tag">practice</span>' : ""}<small>${esc(g.dm.map)} · ${Math.floor((g.dm.duration || 0) / 60)}:${String((g.dm.duration || 0) % 60).padStart(2, "0")}</small></span>
+              ${res}
+              <span class="nums"><span><b>${L.k}-${L.d}-${L.a}</b> K-D-A</span>${L.adr != null ? `<span><b>${L.adr}</b> ADR</span>` : ""}<span><b>${L.hs}%</b> HS</span></span>
+              <button data-open="${g.i}-0">Open</button>
+            </div>`;
+          });
+          html += `</div>`;
+        }
+      }
+    }
+    $("historyList").innerHTML = html || '<p class="none">No games yet.</p>';
+    $("historyList").querySelectorAll("[data-open]").forEach(b => b.onclick = () => { location.hash = `demo-${b.dataset.open.split("-")[0]}`; });
+  }
+  document.querySelectorAll("[data-group]").forEach(b => b.onclick = () => {
+    groupMode = b.dataset.group;
+    document.querySelectorAll("[data-group]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    renderHistory();
+  });
+  document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { location.hash = b.dataset.go; route(); });
+
+  // ---------- menu + routing (#history, #demo-0, #demo-0-r2; no hash = home) ----------
   function renderMenu() {
-    $("cards").innerHTML = DATA.demos.map((dm, i) => {
+    renderCareer();
+    const order = DATA.demos.map((dm, i) => i).reverse().slice(0, 6); // newest first
+    $("cards").innerHTML = order.map(i => DATA.demos[i]).map((dm, q) => { const i = order[q];
       const s = statsOf(dm);
       const segBtns = dm.segments.map((sg, j) => `<button data-open="${i}-${j}">${esc(sg.label)}</button>`).join("");
       const res = dm.segments.filter(x => x.winner).map(x => {
@@ -356,6 +499,10 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
   function route() {
     const m = /^#demo-(\d+)(?:-r(\d+))?$/.exec(location.hash);
     if (!DATA) return;
+    if (location.hash === "#history") {
+      pause(); $("replayView").hidden = true; $("menuView").hidden = true; $("historyView").hidden = false; renderHistory(); window.scrollTo(0, 0); return;
+    }
+    $("historyView").hidden = true;
     if (!m || !DATA.demos[+m[1]]) {
       pause(); $("replayView").hidden = true; $("menuView").hidden = false; requestAnimationFrame(drawThumbs); return;
     }
@@ -664,6 +811,18 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
     return { k, d, hs: k ? Math.round(hs / k * 100) : 0, shots, acc: shots ? Math.round(hits / shots * 100) : 0, dmg, rounds, adr: rounds ? Math.round(dmg / rounds) : null };
   }
   function renderStats() {
+    const a = demo.stats;
+    if (a) { // awpy's numbers for this match
+      const clutch = a.clutches_played ? `${a.clutches_won}/${a.clutches_played}` : "0";
+      const mk = (a.multikill_2k || 0) + (a.multikill_3k || 0) + (a.multikill_4k || 0) + (a.multikill_5k || 0);
+      $("statline").innerHTML = [
+        [`${a.kills}-${a.deaths}-${a.assists}`, "K-D-A"], [Math.round(a.adr), "ADR"], [Math.round(a.kast) + "%", "KAST"],
+        [Math.round(a.headshot_pct) + "%", "HS"], [`${a.opening_kills}/${a.opening_deaths}`, "opening K/D"], [a.traded_deaths, "deaths traded"],
+        [mk, "multi-kill rounds"], [clutch, "clutches won"], [a.utility_damage, "utility dmg"], [a.enemies_flashed, "enemies flashed"],
+        [statsOf(demo).acc + "%", "shots hit"],
+      ].map(([v, k]) => `<span><b>${v}</b>${k}</span>`).join("");
+      return;
+    }
     const s = statsOf(demo);
     $("statline").innerHTML = `<span><b>${s.k}</b>kills</span><span><b>${s.d}</b>deaths</span><span><b>${s.hs}%</b>headshot</span><span><b>${s.shots}</b>shots</span><span><b>${s.acc}%</b>shots hit</span>` + (s.rounds ? `<span><b>${s.adr}</b>damage / round</span>` : `<span><b>${s.dmg}</b>damage</span>`);
   }
