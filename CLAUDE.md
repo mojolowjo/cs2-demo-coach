@@ -31,12 +31,19 @@ Copy each attached demo into its own folder in the scratchpad. Run scripts with 
   each group) → replay (`#demo-N`, `#demo-N-rK`) with radar / "your eyes" (wall check) views, "what you knew", kill feed, shot table,
   awpy stats and coach notes. Coach notes live in the `NOTES` object, keyed `"<demo file>|<segment label>"`.
 
+## Steam lifetime stats
+`.github/workflows/steam-stats.yml` runs daily (and on demand from the Actions tab) using the `STEAM_API_KEY` repo secret, and commits
+`data/steam/latest.json` plus `data/steam/history/YYYY-MM-DD.json`. **Never ask for, store or print the key.** To refresh the page,
+`git pull`, then publish with `data/steam/latest.json` as the artifact file `steam.json`. The page's home shows it in "Steam lifetime"
+(tiles, top weapons, maps) and shows setup steps when the file is missing. Some counters may be CS:GO-era; say so when coaching from them.
+
 ## Adding a new demo to the page (match history must keep growing)
 The workspace is wiped between sessions, so the **published artifact is the store of past matches**:
 1. `Artifact read` the page URL with `path: "demos.json"` (and the radar PNGs if needed) to get the current data.
 2. `python3 -I tools/export_replay.py out/demos.json --merge <downloaded demos.json> --demo "Label" new.dem "YYYY-MM-DD HH:MM"`
 3. Add coach notes for the new rounds to `NOTES` in `replay/index.html`.
-4. Publish `replay/index.html` to the same URL with `demos.json` and `radar_*.png` as files. Commit and push tool/page changes here.
+4. Publish `replay/index.html` to the same URL with `demos.json`, `radar_*.png` and `steam.json` (if present) as files.
+   Read the live page first: m0j may have edited it (he renamed the title once). Commit and push tool/page changes here.
 
 ## Coaching frame (per round)
 Rebuild what he knew (radar spots, likely-heard sounds, killfeed and alive counts, timer, money), then judge:

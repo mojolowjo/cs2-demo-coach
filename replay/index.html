@@ -156,6 +156,19 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
 .tile .v { font-family: var(--f-display); font-weight: 700; font-size: 26px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .tile .k { font-size: 11.5px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
 .tile .s { font-family: var(--f-mono); font-size: 11px; color: var(--dim); }
+.h2sub { font-family: var(--f-mono); font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--dim); font-size: 11.5px; margin-left: 8px; }
+.steam-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; margin-top: 12px; }
+.bars { display: grid; gap: 7px; margin-top: 10px; }
+.bar { display: grid; grid-template-columns: 76px minmax(0, 1fr) 124px; gap: 10px; align-items: center; font-size: 12.5px; }
+.bar .nm { font-family: var(--f-mono); color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar .tr { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+.bar .tr > div { height: 100%; border-radius: 4px; }
+.bar .vv { font-family: var(--f-mono); color: var(--muted); font-size: 11.5px; text-align: right; font-variant-numeric: tabular-nums; }
+.empty { border: 1px dashed var(--line); border-radius: 10px; padding: 16px; color: var(--muted); display: grid; gap: 8px; font-size: 13px; max-width: 70ch; }
+.empty b { color: var(--fg); font-family: var(--f-display); font-weight: 600; font-size: 15px; }
+.empty ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.empty code { font-family: var(--f-mono); color: var(--fg); font-size: 12px; }
+.demo-sum { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
 /* match history */
 .history { display: grid; gap: 18px; }
 .yr { font-family: var(--f-display); font-weight: 700; font-size: 30px; margin: 8px 0 0; color: var(--fg); }
@@ -194,12 +207,11 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
       <button data-go="history">Match history →</button>
     </nav>
     <section class="career-wrap">
-      <h2>Career</h2>
-      <div class="career" id="career"></div>
-      <p class="note" id="careerNote"></p>
+      <h2>Steam lifetime <span class="h2sub" id="steamWhen"></span></h2>
+      <div id="steam"></div>
     </section>
     <section class="recent-wrap">
-      <h2>Recent</h2>
+      <h2>Recent <span class="h2sub" id="demoSum"></span></h2>
       <div class="cards" id="cards"><div class="loading">Loading demos…</div></div>
     </section>
   </section>
@@ -378,21 +390,51 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
     if (st) return { k: st.kills, d: st.deaths, a: st.assists, hs: Math.round(st.headshot_pct), adr: Math.round(st.adr), kast: Math.round(st.kast), rounds: st.rounds_played, hsk: st.headshot_kills, dmg: st.adr * st.rounds_played };
     return { k: f.k, d: f.d, a: 0, hs: f.hs, adr: null, kast: null, rounds: 0, hsk: Math.round(f.k * f.hs / 100), dmg: 0 };
   }
-  function renderCareer() {
-    const ms = DATA.demos.filter(x => x.type === "match"), pr = DATA.demos.filter(x => x.type !== "match");
-    let k = 0, d = 0, a = 0, hsk = 0, rounds = 0, dmg = 0, kastR = 0, w = 0, l = 0;
-    for (const m of ms) { const L = lineOf(m); k += L.k; d += L.d; a += L.a; hsk += L.hsk; rounds += L.rounds; dmg += L.dmg; kastR += (L.kast ?? 0) * L.rounds / 100; const r = resultOf(m); if (r === "W") w++; if (r === "L") l++; }
-    const tile = (v, kk, s = "") => `<div class="tile"><span class="v">${v}</span><span class="k">${kk}</span>${s ? `<span class="s">${s}</span>` : ""}</div>`;
-    $("career").innerHTML = [
-      tile(ms.length, "Matches played", `${w}W · ${l}L`),
-      tile(pr.length, "Practice sessions"),
-      tile(rounds, "Rounds"),
-      tile(d ? (k / d).toFixed(2) : k ? "∞" : "0", "K/D", `${k} · ${d} · ${a} K·D·A`),
-      tile(rounds ? Math.round(dmg / rounds) : "—", "ADR"),
-      tile(rounds ? Math.round(kastR / rounds * 100) + "%" : "—", "KAST"),
-      tile(k ? Math.round(hsk / k * 100) + "%" : "—", "Headshot %"),
-    ].join("");
-    $("careerNote").textContent = "Career numbers count matches only (not practice). ADR, KAST and openings come from awpy. Bot matches count too, so treat them as practice numbers until real matches are added.";
+  // ---------- Steam lifetime (steam.json = data/steam/latest.json from the repo's daily job) ----------
+  let STEAM = null;
+  fetch("steam.json").then(r => r.ok ? r.json() : null).then(j => { STEAM = j; if (DATA) renderSteam(); }).catch(() => {});
+  const nf = (n) => n == null ? "—" : Number(n).toLocaleString("en-US");
+  const WEAP = { ak47: "AK-47", m4a1: "M4A4/M4A1-S", awp: "AWP", deagle: "Deagle", glock: "Glock", hkp2000: "USP/P2000", p250: "P250", mp9: "MP9", mac10: "MAC-10", famas: "FAMAS", galilar: "Galil", sg556: "SG 553", aug: "AUG", ssg08: "Scout", ump45: "UMP-45", p90: "P90", fiveseven: "Five-SeveN", tec9: "Tec-9", elite: "Dualies", xm1014: "XM1014", nova: "Nova", mag7: "MAG-7", negev: "Negev", m249: "M249", bizon: "Bizon", mp7: "MP7", scar20: "SCAR-20", g3sg1: "G3SG1", sawedoff: "Sawed-Off", knife: "Knife", hegrenade: "HE", molotov: "Molotov", taser: "Zeus", revolver: "R8", cz75a: "CZ75" };
+  function renderSteam() {
+    $("demoSum").textContent = `${DATA.demos.filter(x => x.type === "match").length} demo matches · ${DATA.demos.filter(x => x.type !== "match").length} practice`;
+    if (!STEAM || !STEAM.stats) {
+      $("steamWhen").textContent = "";
+      $("steam").innerHTML = `<div class="empty"><b>Waiting for your first Steam stats</b>
+        <ol><li>In your <code>cs2-demo-coach</code> repo: Settings → Secrets and variables → Actions → New repository secret, name <code>STEAM_API_KEY</code>, value = your key.</li>
+        <li>Actions tab → <code>Steam stats</code> → Run workflow.</li>
+        <li>Tell Claude it ran, and this section fills in.</li></ol></div>`;
+      return;
+    }
+    const s = STEAM.stats, g = (k) => s[k] ?? null;
+    const pct = (a, b) => (a != null && b) ? Math.round(a / b * 1000) / 10 + "%" : "—";
+    const tile = (v, kk, sub = "") => `<div class="tile"><span class="v">${v}</span><span class="k">${kk}</span>${sub ? `<span class="s">${sub}</span>` : ""}</div>`;
+    const k = g("total_kills"), d = g("total_deaths");
+    const hours = STEAM.playtime_minutes != null ? Math.round(STEAM.playtime_minutes / 60) : (g("total_time_played") != null ? Math.round(g("total_time_played") / 3600) : null);
+    const tiles = [
+      tile(nf(hours), "Hours played", STEAM.playtime_2weeks_minutes ? `${Math.round(STEAM.playtime_2weeks_minutes / 60)} h last 2 weeks` : ""),
+      tile(d ? (k / d).toFixed(2) : "—", "K/D", `${nf(k)} kills · ${nf(d)} deaths`),
+      tile(pct(g("total_kills_headshot"), k), "Headshot %"),
+      tile(pct(g("total_shots_hit"), g("total_shots_fired")), "Accuracy", `${nf(g("total_shots_fired"))} shots`),
+      tile(pct(g("total_matches_won"), g("total_matches_played")), "Match win %", `${nf(g("total_matches_played"))} matches`),
+      tile(pct(g("total_wins"), g("total_rounds_played")), "Round win %", `${nf(g("total_rounds_played"))} rounds`),
+      tile(nf(g("total_mvps")), "MVPs"),
+      tile(nf(g("total_planted_bombs")), "Bombs planted", `${nf(g("total_defused_bombs"))} defused`),
+    ];
+    // weapons: kills, with accuracy
+    const weapons = Object.keys(WEAP).map(w => ({ w, kills: g("total_kills_" + w) || 0, shots: g("total_shots_" + w), hits: g("total_hits_" + w) })).filter(x => x.kills > 0).sort((a, b) => b.kills - a.kills).slice(0, 8);
+    const maxK = weapons[0]?.kills || 1;
+    const wBars = weapons.map(x => `<div class="bar"><span class="nm">${esc(WEAP[x.w])}</span><span class="tr"><div style="width:${x.kills / maxK * 100}%;background:var(--t)"></div></span><span class="vv">${nf(x.kills)}${x.shots ? " · " + pct(x.hits, x.shots) : ""}</span></div>`).join("");
+    // maps: round win % (min 20 rounds)
+    const maps = Object.keys(s).filter(n => n.startsWith("total_rounds_map_")).map(n => { const m = n.slice("total_rounds_map_".length); return { m, rounds: s[n], wins: s["total_wins_map_" + m] || 0 }; })
+      .filter(x => x.rounds >= 20).sort((a, b) => b.rounds - a.rounds).slice(0, 8);
+    const mBars = maps.map(x => { const r = x.wins / x.rounds; return `<div class="bar"><span class="nm">${esc(x.m.replace(/^(de|cs|ar)_/, ""))}</span><span class="tr"><div style="width:${r * 100}%;background:${r >= 0.5 ? "var(--good)" : "var(--ct)"}"></div></span><span class="vv">${Math.round(r * 100)}% · ${nf(x.rounds)} rds</span></div>`; }).join("");
+    $("steamWhen").textContent = `updated ${new Date(STEAM.fetched_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+    $("steam").innerHTML = `<div class="career">${tiles.join("")}</div>
+      <div class="steam-grid">
+        ${weapons.length ? `<div class="panel"><h2>Top weapons <span class="h2sub">kills · accuracy</span></h2><div class="bars">${wBars}</div></div>` : ""}
+        ${maps.length ? `<div class="panel"><h2>Maps <span class="h2sub">round win % · rounds</span></h2><div class="bars">${mBars}</div></div>` : ""}
+      </div>
+      <p class="note">From Steam's lifetime counters for CS2 (app 730). Some of them may date back to CS:GO or not update every CS2 mode, so compare them with your demo stats rather than reading them as exact.</p>`;
   }
 
   let groupMode = "day";
@@ -451,7 +493,7 @@ tbody tr.current { background: color-mix(in srgb, var(--ct) 14%, transparent); }
 
   // ---------- menu + routing (#history, #demo-0, #demo-0-r2; no hash = home) ----------
   function renderMenu() {
-    renderCareer();
+    renderSteam();
     const order = DATA.demos.map((dm, i) => i).reverse().slice(0, 6); // newest first
     $("cards").innerHTML = order.map(i => DATA.demos[i]).map((dm, q) => { const i = order[q];
       const s = statsOf(dm);
