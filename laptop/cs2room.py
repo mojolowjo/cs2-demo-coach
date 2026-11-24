@@ -208,7 +208,18 @@ def build_site():
                         "--steam", os.path.join(DATA, "steam", "latest.json")], capture_output=True, text=True, **NO_WINDOW)
     if p.returncode != 0: raise RuntimeError("site build failed: " + p.stderr[-300:])
 
+def finish_tunnel_setup():
+    """A GitHub key handed over in config\\github.key.txt (by Claude) means setup-tunnel.ps1 still has to run: run it here."""
+    if os.name != "nt" or not os.path.exists(os.path.join(CONFIG, "github.key.txt")): return
+    log("tunnel: key handed over; running setup-tunnel.ps1")
+    p = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", os.path.join(APP, "laptop", "setup-tunnel.ps1")],
+                       capture_output=True, text=True, errors="replace", **NO_WINDOW)
+    tail = [l for l in (p.stdout + p.stderr).splitlines() if l.strip()][-3:]
+    log("tunnel setup: " + (" | ".join(tail) or f"exit {p.returncode}"))
+
 def run_all(check=True):
+    try: finish_tunnel_setup()
+    except Exception as e: log(f"tunnel setup error: {e}")
     with RunLock():
         for name, fn in [("steam", steam_stats)] + ([("check", check_matches)] if check else []) + [("process", process_inbox)]:
             try: fn()
