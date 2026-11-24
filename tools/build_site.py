@@ -1,10 +1,12 @@
 """Assemble m0j's CS2 ROOM as a plain static site (used by the laptop and by GitHub Pages).
 
-usage: python build_site.py APP_DIR OUT_DIR
-  APP_DIR = a copy of this repo (needs replay/ and optionally data/steam/latest.json)
-  OUT_DIR = folder to write index.html, demos.json, steam.json, radar_*.png into
+usage: python build_site.py APP_DIR OUT_DIR [--demos DIR] [--steam FILE]
+  APP_DIR  a copy of this repo (the page lives in replay/index.html)
+  OUT_DIR  folder to write index.html, demos.json, steam.json, radar_*.png into
+  --demos  folder holding demos.json + radar_*.png (default APP_DIR/replay; the laptop uses CS2Room/data)
+  --steam  Steam stats file (default APP_DIR/data/steam/latest.json)
 """
-import sys, shutil, glob, os
+import argparse, glob, os, shutil
 
 HEAD = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -13,20 +15,27 @@ HEAD = """<!doctype html>
 """
 TAIL = "\n</body></html>\n"
 
-def build(app, out):
+def build(app, out, demos=None, steam=None):
+    demos = demos or os.path.join(app, "replay")
+    steam = steam or os.path.join(app, "data", "steam", "latest.json")
     os.makedirs(out, exist_ok=True)
     page = open(os.path.join(app, "replay", "index.html"), encoding="utf-8").read()
     # replay/index.html is written for claude.ai artifacts, which add the document skeleton; add it here.
-    with open(os.path.join(out, "index.html"), "w", encoding="utf-8", newline="\n") as fh:
+    tmp = os.path.join(out, "index.html.tmp")
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(HEAD + page + TAIL)
-    shutil.copy(os.path.join(app, "replay", "demos.json"), out)
-    for png in glob.glob(os.path.join(app, "replay", "radar_*.png")):
+    os.replace(tmp, os.path.join(out, "index.html"))
+    if os.path.exists(os.path.join(demos, "demos.json")):
+        shutil.copy(os.path.join(demos, "demos.json"), out)
+    for png in glob.glob(os.path.join(demos, "radar_*.png")):
         shutil.copy(png, out)
-    steam = os.path.join(app, "data", "steam", "latest.json")
     if os.path.exists(steam):
         shutil.copy(steam, os.path.join(out, "steam.json"))
     open(os.path.join(out, ".nojekyll"), "w").close()
     print("built", out, sorted(os.listdir(out)))
 
 if __name__ == "__main__":
-    build(sys.argv[1], sys.argv[2])
+    ap = argparse.ArgumentParser()
+    ap.add_argument("app"); ap.add_argument("out"); ap.add_argument("--demos"); ap.add_argument("--steam")
+    a = ap.parse_args()
+    build(a.app, a.out, a.demos, a.steam)

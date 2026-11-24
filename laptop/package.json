@@ -1,0 +1,9 @@
+{
+  "name": "cs2room-laptop",
+  "private": true,
+  "description": "Asks the CS2 game coordinator for replay links using m0j's demo-bot account",
+  "dependencies": {
+    "globaloffensive": "^3.2.0",
+    "steam-user": "^5.2.0"
+  }
+}

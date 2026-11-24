@@ -1,33 +1,30 @@
-# Runs every 30 minutes (scheduled task "CS2Room update"): pulls the latest repo from GitHub
-# (tools, page, match data, nightly Steam stats) into CS2Room\app and rebuilds CS2Room\site.
-# Uses the public zip download, so Git doesn't need to be installed.
+# Runs every 6 hours (scheduled task "CS2Room update"): refreshes CS2Room\app from GitHub so the laptop gets Claude's
+# fixes to the tools and page, then rebuilds the site from the laptop's own data. Uses the public zip (no Git needed).
+# Your match data, Steam stats and settings live outside app\ and are never touched or uploaded.
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-$Log = Join-Path $Root "logs\update.log"
-function Log($m) { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $m" | Add-Content -Path $Log }
+$App = Join-Path $Root "app"
+$Log = Join-Path $Root "logs\cs2room.log"
+function Log($m) { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  update: $m" | Add-Content -Path $Log }
 
 try {
   $tmp = Join-Path $env:TEMP "cs2room-update"
   Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
   New-Item -ItemType Directory -Path $tmp | Out-Null
-  $zip = Join-Path $tmp "main.zip"
-  Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/mojolowjo/cs2-demo-coach/archive/refs/heads/main.zip" -OutFile $zip
-  Expand-Archive -Path $zip -DestinationPath $tmp -Force
-  $src = Join-Path $tmp "cs2-demo-coach-main"
+  Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/mojolowjo/cs2-demo-coach/archive/refs/heads/main.zip" -OutFile "$tmp\main.zip"
+  Expand-Archive -Path "$tmp\main.zip" -DestinationPath $tmp -Force
+  $before = (Get-FileHash "$App\laptop\package.json" -ErrorAction SilentlyContinue).Hash
 
-  # Replace app\ with the fresh copy. robocopy /MIR mirrors it; exit codes below 8 mean success.
-  robocopy $src (Join-Path $Root "app") /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
+  # mirror the fresh copy into app\, keeping the installed Node packages
+  robocopy "$tmp\cs2-demo-coach-main" $App /MIR /XD node_modules /NFL /NDL /NJH /NJS /NP | Out-Null
   if ($LASTEXITCODE -ge 8) { throw "robocopy failed with code $LASTEXITCODE" }
 
-  & (Join-Path $Root ".venv\Scripts\python.exe") (Join-Path $Root "app\tools\build_site.py") (Join-Path $Root "app") (Join-Path $Root "site") | Out-Null
-  Log "updated from GitHub and rebuilt site"
+  if ((Get-FileHash "$App\laptop\package.json").Hash -ne $before) { Push-Location "$App\laptop"; npm install --omit=dev --no-audit --no-fund --silent; Pop-Location }
+  & (Join-Path $Root ".venv\Scripts\python.exe") "$App\laptop\cs2room.py" build | Out-Null
+  Log "app refreshed from GitHub, site rebuilt"
   Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
   Log "ERROR: $($_.Exception.Message)"
   exit 1
 }
-
-# keep the log short
-$lines = Get-Content $Log -ErrorAction SilentlyContinue
-if ($lines.Count -gt 500) { $lines | Select-Object -Last 300 | Set-Content $Log }

@@ -37,7 +37,12 @@ Copy each attached demo into its own folder in the scratchpad. Run scripts with 
 `git pull`, then publish with `data/steam/latest.json` as the artifact file `steam.json`. The page's home shows it in "Steam lifetime"
 (tiles, top weapons, maps) and shows setup steps when the file is missing. Some counters may be CS:GO-era; say so when coaching from them.
 
-## The public site (main home of the page)
+## The laptop (main home now)
+m0j's Windows laptop runs everything locally: see `laptop/README.md`. Its match history lives in
+`C:\Users\mojol\Documents\CS2Room\data\demos.json`, not in this repo, and it gets code updates from this repo every 6 hours.
+When this chat is linked to the laptop, read `CS2Room\logs\cs2room.log` first when something seems off.
+
+## The public site (backup copy)
 **https://mojolowjo.github.io/cs2-demo-coach/** is built by `.github/workflows/pages.yml` from `replay/index.html`,
 `replay/demos.json`, `replay/radar_*.png` and `data/steam/latest.json` (as `steam.json`). It rebuilds on every push and after
 each nightly Steam stats run, so Steam numbers update with no Claude run. m0j chose to make it public.

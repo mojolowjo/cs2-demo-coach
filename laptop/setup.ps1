@@ -1,61 +1,112 @@
-# One-time setup for CS2Room on m0j's Windows laptop.
-# Run from PowerShell:
+# One-time setup for CS2Room on m0j's Windows laptop. Safe to run again.
 #   powershell -ExecutionPolicy Bypass -File "$HOME\Documents\CS2Room\app\laptop\setup.ps1"
-# Safe to run again: it only adds what's missing and re-registers the two scheduled tasks.
+#
+# Installs (for this user only): Python 3.12, Node.js LTS, CS2Room's own Python env + Node packages.
+# Encrypts config\secrets.local.json with Windows DPAPI (only this Windows account can read it) and deletes the plain copy.
+# Asks once for admin (UAC) to open ports 8080 (site) and 3000 (match-over signal) on Private networks.
+# Registers scheduled tasks: CS2Room site, CS2Room listener, CS2Room backup check, CS2Room update.
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent      # ...\CS2Room
+$App = Join-Path $Root "app"
 $Venv = Join-Path $Root ".venv"
-Write-Host "CS2Room folder: $Root"
+$Cfg = Join-Path $Root "config"
+Write-Host "CS2Room folder: $Root" -ForegroundColor Cyan
 
-# 1. Folders
-foreach ($d in "site", "demos\inbox", "demos\archive", "config", "logs") {
-  New-Item -ItemType Directory -Force -Path (Join-Path $Root $d) | Out-Null
-}
+# 1. Folders, and seed local match data from the repo copy the first time
+foreach ($d in "site", "data", "demos\inbox", "demos\archive", "config", "logs") { New-Item -ItemType Directory -Force -Path (Join-Path $Root $d) | Out-Null }
+if (-not (Test-Path "$Root\data\demos.json")) { Copy-Item "$App\replay\demos.json" "$Root\data\"; Copy-Item "$App\replay\radar_*.png" "$Root\data\" }
 
-# 2. Python (user install, no admin) via winget, if missing
-function Find-Python {
-  foreach ($c in @("py -3", "python")) {
-    try { $v = & cmd /c "$c --version 2>&1"; if ($v -match "Python 3\.(1[1-9])") { return $c } } catch {}
-  }
-  return $null
-}
+function Refresh-Path { $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine") }
+
+# 2. Python
+function Find-Python { foreach ($c in @("py -3.12", "py -3", "python")) { try { $v = & cmd /c "$c --version 2>&1"; if ($v -match "Python 3\.(1[1-9])") { return $c } } catch {} }; return $null }
 $py = Find-Python
 if (-not $py) {
-  Write-Host "Installing Python 3.12 (user only)..."
+  Write-Host "Installing Python 3.12..." -ForegroundColor Cyan
   winget install -e --id Python.Python.3.12 --scope user --accept-package-agreements --accept-source-agreements
-  $env:Path = [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetEnvironmentVariable("Path", "Machine")
-  $py = Find-Python
+  Refresh-Path; $py = Find-Python
   if (-not $py) { throw "Python installed but not found yet. Close PowerShell, open a new one, and run setup.ps1 again." }
 }
-Write-Host "Using: $py"
-
-# 3. CS2Room's own Python environment (keeps its packages separate from everything else)
 if (-not (Test-Path "$Venv\Scripts\python.exe")) { & cmd /c "$py -m venv `"$Venv`"" }
 & "$Venv\Scripts\python.exe" -m pip install --upgrade pip --quiet
 & "$Venv\Scripts\python.exe" -m pip install --quiet awpy demoparser2 pandas pyarrow
-Write-Host "Python packages ready"
+Write-Host "Python ready" -ForegroundColor Green
 
-# 4. Build the site once
-& "$Venv\Scripts\python.exe" (Join-Path $Root "app\tools\build_site.py") (Join-Path $Root "app") (Join-Path $Root "site")
+# 3. awpy map data (radar images + wall geometry for the line-of-sight check)
+& cmd /c "`"$Venv\Scripts\awpy.exe`" get"
+if ($LASTEXITCODE -ne 0) { Write-Host "Map data download failed; replays still work, the wall check will be off until it succeeds." -ForegroundColor Yellow }
 
-# 5. Scheduled tasks (current user, no admin):
-#    - "CS2Room site": web server on port 8080, starts at logon, no window
-#    - "CS2Room update": every 30 minutes, pulls the repo from GitHub and rebuilds the site
+# 4. Node.js + the demo-bot packages
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+  Write-Host "Installing Node.js LTS..." -ForegroundColor Cyan
+  winget install -e --id OpenJS.NodeJS.LTS --scope user --accept-package-agreements --accept-source-agreements
+  Refresh-Path
+}
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw "Node installed but not found yet. Close PowerShell, open a new one, and run setup.ps1 again." }
+Push-Location "$App\laptop"; npm install --omit=dev --no-audit --no-fund --silent; Pop-Location
+Write-Host "Node ready" -ForegroundColor Green
+
+# 5. Secrets: encrypt with this Windows account (DPAPI), then remove the plain file
+$plain = Join-Path $Cfg "secrets.local.json"
+if (Test-Path $plain) {
+  $json = Get-Content $plain -Raw
+  ConvertTo-SecureString $json -AsPlainText -Force | ConvertFrom-SecureString | Set-Content (Join-Path $Cfg "secrets.dpapi")
+  Remove-Item $plain
+  Write-Host "Secrets encrypted (config\secrets.dpapi)" -ForegroundColor Green
+}
+# match-over signal password (shared with CS2's config file on the gaming PC)
+$tokFile = Join-Path $Cfg "gsi_token.txt"
+if (-not (Test-Path $tokFile)) { -join ((48..57) + (97..122) | Get-Random -Count 24 | ForEach-Object { [char]$_ }) | Set-Content $tokFile }
+$token = (Get-Content $tokFile).Trim()
+
+# 6. Firewall: allow the site (8080) and the match-over signal (3000) on Private networks (one admin prompt)
+$rules = 'New-NetFirewallRule -DisplayName "CS2Room site" -Direction Inbound -Protocol TCP -LocalPort 8080 -Profile Private -Action Allow -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName "CS2Room match signal" -Direction Inbound -Protocol TCP -LocalPort 3000 -Profile Private -Action Allow -ErrorAction SilentlyContinue'
+if (-not (Get-NetFirewallRule -DisplayName "CS2Room site" -ErrorAction SilentlyContinue)) {
+  Write-Host "Windows will ask for admin once, to open ports 8080 and 3000 on your home network." -ForegroundColor Yellow
+  Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile -Command $rules"
+}
+
+# 7. Scheduled tasks (current user)
 $pyw = "$Venv\Scripts\pythonw.exe"
-$siteAction = New-ScheduledTaskAction -Execute $pyw -Argument "-m http.server 8080 --bind 0.0.0.0 --directory `"$Root\site`"" -WorkingDirectory $Root
-$siteTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-Register-ScheduledTask -TaskName "CS2Room site" -Action $siteAction -Trigger $siteTrigger -Settings $settings -Force | Out-Null
+$main = "`"$App\laptop\cs2room.py`""
+$always = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 99 -RestartInterval (New-TimeSpan -Minutes 1)
+$short = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 1)
+$logon = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 
-$upd = Join-Path $Root "app\laptop\update.ps1"
-$updAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$upd`""
-$updTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes 30)
-$updSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-Register-ScheduledTask -TaskName "CS2Room update" -Action $updAction -Trigger $updTrigger -Settings $updSettings -Force | Out-Null
+Register-ScheduledTask -TaskName "CS2Room site" -Force -Settings $always -Trigger $logon `
+  -Action (New-ScheduledTaskAction -Execute $pyw -Argument "-m http.server 8080 --bind 0.0.0.0 --directory `"$Root\site`"" -WorkingDirectory $Root) | Out-Null
+Register-ScheduledTask -TaskName "CS2Room listener" -Force -Settings $always -Trigger $logon `
+  -Action (New-ScheduledTaskAction -Execute $pyw -Argument "$main listen" -WorkingDirectory $Root) | Out-Null
+Register-ScheduledTask -TaskName "CS2Room backup check" -Force -Settings $short `
+  -Trigger (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 30)) `
+  -Action (New-ScheduledTaskAction -Execute $pyw -Argument "$main run" -WorkingDirectory $Root) | Out-Null
+Register-ScheduledTask -TaskName "CS2Room update" -Force -Settings $short `
+  -Trigger (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) -RepetitionInterval (New-TimeSpan -Hours 6)) `
+  -Action (New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$App\laptop\update.ps1`"") | Out-Null
 
-Start-ScheduledTask -TaskName "CS2Room site"
-$ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch "Loopback|vEthernet" -and $_.IPAddress -notmatch "^169\." } | Select-Object -First 1).IPAddress
+# 8. First run: stats, your latest match, site
+Write-Host "First run (Steam stats + your latest match; downloading a demo can take a minute)..." -ForegroundColor Cyan
+& "$Venv\Scripts\python.exe" "$App\laptop\cs2room.py" run
+Start-ScheduledTask -TaskName "CS2Room site"; Start-ScheduledTask -TaskName "CS2Room listener"
+
+# 9. The file for the gaming PC (CS2's match-over signal)
+$ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch "Loopback|vEthernet|WSL" -and $_.IPAddress -notmatch "^169\." -and $_.PrefixOrigin -ne "WellKnown" } | Select-Object -First 1).IPAddress
+@"
+"CS2Room match over"
+{
+  "uri"       "http://${ip}:3000/"
+  "timeout"   "5.0"
+  "buffer"    "1.0"
+  "throttle"  "5.0"
+  "heartbeat" "60.0"
+  "auth" { "token" "$token" }
+  "data" { "map" "1" }
+}
+"@ | Set-Content (Join-Path $Cfg "gamestate_integration_cs2room.cfg")
+
 Write-Host ""
-Write-Host "Done. Open http://localhost:8080 on this laptop, or http://${ip}:8080 from your phone/PC at home."
-Write-Host "If Windows asks about the firewall for Python, allow it on Private networks only."
+Write-Host "Done." -ForegroundColor Green
+Write-Host "  Site:  http://localhost:8080  (at home from other devices: http://${ip}:8080)"
+Write-Host "  Log:   $Root\logs\cs2room.log"
+Write-Host "  For the gaming PC: copy $Cfg\gamestate_integration_cs2room.cfg into CS2's game\csgo\cfg folder (Claude will give you the command)."
